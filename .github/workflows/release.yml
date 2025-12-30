@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Build Backend
+        run: |
+          CGO_ENABLED=1 go build -ldflags="-s -w -X main.Version=${{ github.ref_name }}" -o sampmail ./cmd/server
+
+      - name: Build Frontend
+        run: |
+          cd web
+          bun install
+          bun run build
+          cd ..
+
+      - name: Create Release Archive
+        run: |
+          mkdir -p release
+          cp sampmail release/
+          cp -r web/dist release/web
+          cp .env.example release/
+          cp README.md release/
+          cp LICENSE.md release/
+          cd release
+          tar -czvf sampmail-linux-amd64.tar.gz sampmail web .env.example README.md LICENSE.md
+          cd ..
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/sampmail-linux-amd64.tar.gz
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

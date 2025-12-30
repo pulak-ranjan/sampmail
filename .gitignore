@@ -1,0 +1,36 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Go binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+sampmail
+
+# Dependencies
+web/node_modules/
+
+# Build outputs
+web/dist/
+bin/
+
+# Logs
+*.log
+web/*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/
