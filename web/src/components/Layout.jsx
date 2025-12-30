@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { 
-  LayoutDashboard, BarChart3, Globe, ShieldCheck, Key, MailWarning, Network, 
-  ListOrdered, Webhook, Settings, FileText, Lock, LogOut, Menu, X, ServerCog, 
-  Wrench, Thermometer, Mail, Users, Tag, PieChart
+import {
+  LayoutDashboard, BarChart3, Globe, ShieldCheck, Key, MailWarning, Network,
+  ListOrdered, Webhook, Settings, FileText, Lock, LogOut, Menu, X, ServerCog,
+  Wrench, Thermometer, Mail, Users, Tag, PieChart, Send, Zap, List, Filter, Ban, Radio
 } from 'lucide-react';
 import { ThemeToggle } from './ThemeProvider';
 import { useAuth } from '../AuthContext';
 import { cn } from '../lib/utils';
-import AIAssistant from './AIAssistant'; // Imported Agent
+import AIAssistant from './AIAssistant';
 
 export default function Layout({ children }) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -18,20 +18,28 @@ export default function Layout({ children }) {
 
   const links = [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/analytics', icon: PieChart, label: 'Analytics' },
+    { path: '/campaigns', icon: Send, label: 'Campaigns' },
+    { path: '/automations', icon: Zap, label: 'Automations' },
     { path: '/templates', icon: Mail, label: 'Templates' },
+    { path: '/lists', icon: List, label: 'Lists' },
     { path: '/subscribers', icon: Users, label: 'Subscribers' },
-    { path: '/tools', icon: Wrench, label: 'System Tools' },
+    { path: '/tags', icon: Tag, label: 'Tags' },
+    { path: '/segments', icon: Filter, label: 'Segments' },
+    { path: '/suppressions', icon: Ban, label: 'Suppressions' },
     { path: '/stats', icon: BarChart3, label: 'Statistics' },
+    { path: '/analytics', icon: PieChart, label: 'Analytics' },
     { path: '/domains', icon: Globe, label: 'Domains' },
     { path: '/warmup', icon: Thermometer, label: 'IP Warmup' },
+    { path: '/sending-ips', icon: Radio, label: 'Sending IPs' },
+    { path: '/ips', icon: Network, label: 'IP Inventory' },
+    { path: '/proxies', icon: ServerCog, label: 'Proxies' },
     { path: '/apikeys', icon: Key, label: 'API Keys' },
     { path: '/dmarc', icon: ShieldCheck, label: 'DMARC' },
     { path: '/dkim', icon: Key, label: 'DKIM' },
     { path: '/bounce', icon: MailWarning, label: 'Bounce' },
-    { path: '/ips', icon: Network, label: 'IP Inventory' },
     { path: '/queue', icon: ListOrdered, label: 'Queue' },
     { path: '/webhooks', icon: Webhook, label: 'Webhooks' },
+    { path: '/tools', icon: Wrench, label: 'System Tools' },
     { path: '/config', icon: ServerCog, label: 'Config Gen' },
     { path: '/logs', icon: FileText, label: 'System Logs' },
     { path: '/security', icon: Lock, label: 'Security' },
@@ -107,7 +115,7 @@ export default function Layout({ children }) {
       {/* Main Content */}
       <main className="flex-1 overflow-auto h-[calc(100vh-65px)] md:h-screen bg-muted/20 relative">
         <div className="p-4 md:p-8 max-w-7xl mx-auto">{children}</div>
-        
+
         {/* The Agent is mounted here */}
         <AIAssistant />
       </main>

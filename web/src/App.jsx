@@ -22,10 +22,17 @@ import Settings from './pages/Settings';
 import ToolsPage from './pages/ToolsPage';
 import WarmupPage from './pages/WarmupPage';
 import APIKeysPage from './pages/APIKeysPage';
-// NEW Pages
 import TemplatesPage from './pages/TemplatesPage';
-// import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import SubscribersPage from './pages/SubscribersPage';
+import ListsPage from './pages/ListsPage';
+import CampaignsPage from './pages/CampaignsPage';
+import AutomationsPage from './pages/AutomationsPage';
+import AnalyticsDashboard from './pages/AnalyticsDashboard';
+import TagsPage from './pages/TagsPage';
+import SegmentsPage from './pages/SegmentsPage';
+import SuppressionsPage from './pages/SuppressionsPage';
+import ProxiesPage from './pages/ProxiesPage';
+import SendingIPsPage from './pages/SendingIPsPage';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -45,16 +52,24 @@ export default function App() {
             <Route path="/login" element={<LoginRegister />} />
 
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            {/* <Route path="/analytics" element={<ProtectedRoute><AnalyticsDashboard /></ProtectedRoute>} /> */}
+            <Route path="/campaigns" element={<ProtectedRoute><CampaignsPage /></ProtectedRoute>} />
+            <Route path="/automations" element={<ProtectedRoute><AutomationsPage /></ProtectedRoute>} />
             <Route path="/templates" element={<ProtectedRoute><TemplatesPage /></ProtectedRoute>} />
+            <Route path="/lists" element={<ProtectedRoute><ListsPage /></ProtectedRoute>} />
             <Route path="/subscribers" element={<ProtectedRoute><SubscribersPage /></ProtectedRoute>} />
+            <Route path="/tags" element={<ProtectedRoute><TagsPage /></ProtectedRoute>} />
+            <Route path="/segments" element={<ProtectedRoute><SegmentsPage /></ProtectedRoute>} />
+            <Route path="/suppressions" element={<ProtectedRoute><SuppressionsPage /></ProtectedRoute>} />
             <Route path="/tools" element={<ProtectedRoute><ToolsPage /></ProtectedRoute>} />
             <Route path="/stats" element={<ProtectedRoute><StatsPage /></ProtectedRoute>} />
+            <Route path="/analytics" element={<ProtectedRoute><AnalyticsDashboard /></ProtectedRoute>} />
             <Route path="/domains" element={<ProtectedRoute><Domains /></ProtectedRoute>} />
             <Route path="/dmarc" element={<ProtectedRoute><DMARCPage /></ProtectedRoute>} />
             <Route path="/dkim" element={<ProtectedRoute><DKIMPage /></ProtectedRoute>} />
             <Route path="/bounce" element={<ProtectedRoute><BouncePage /></ProtectedRoute>} />
             <Route path="/ips" element={<ProtectedRoute><IPsPage /></ProtectedRoute>} />
+            <Route path="/sending-ips" element={<ProtectedRoute><SendingIPsPage /></ProtectedRoute>} />
+            <Route path="/proxies" element={<ProtectedRoute><ProxiesPage /></ProtectedRoute>} />
             <Route path="/queue" element={<ProtectedRoute><QueuePage /></ProtectedRoute>} />
             <Route path="/webhooks" element={<ProtectedRoute><WebhooksPage /></ProtectedRoute>} />
             <Route path="/warmup" element={<ProtectedRoute><WarmupPage /></ProtectedRoute>} />
