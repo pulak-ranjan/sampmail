@@ -54,8 +54,7 @@ type SendResult struct {
 	SentAt      time.Time
 }
 
-// ImportRecipientsFromCSV parses a CSV and adds recipients with batch inserts
-// Anti-spam: Filters out suppressed emails during import
+// ImportRecipientsFromCSV imports recipients from CSV file
 func (cs *CampaignService) ImportRecipientsFromCSV(campaignID uint, r io.Reader) error {
 	log := logger.CampaignLogger(campaignID)
 	cfg := config.Get()
@@ -70,7 +69,6 @@ func (cs *CampaignService) ImportRecipientsFromCSV(campaignID uint, r io.Reader)
 	skippedSuppressed := 0
 	skippedInvalid := 0
 
-	// Start a transaction for batch inserts
 	tx := cs.Store.DB.Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -85,6 +83,12 @@ func (cs *CampaignService) ImportRecipientsFromCSV(campaignID uint, r io.Reader)
 			break
 		}
 		lineNum++
+
+		if lineNum > MaxRecipientsPerImport {
+			tx.Rollback()
+			return fmt.Errorf("import exceeds maximum recipient limit of %d", MaxRecipientsPerImport)
+		}
+
 		if err != nil {
 			log.Warn("invalid CSV line", "line", lineNum, "error", err)
 			skippedInvalid++
@@ -193,18 +197,15 @@ func isValidEmailFormat(email string) bool {
 	return true
 }
 
-// Anti-spam thresholds
+// Campaign thresholds
 const (
-	// MaxBounceRatePercent - pause campaign if bounce rate exceeds this
-	MaxBounceRatePercent = 5.0
-	// MinEmailsBeforeBounceCheck - minimum emails sent before checking bounce rate
+	MaxBounceRatePercent       = 5.0
 	MinEmailsBeforeBounceCheck = 100
-	// MaxComplaintRatePercent - pause campaign if complaint rate exceeds this
-	MaxComplaintRatePercent = 0.1
+	MaxComplaintRatePercent    = 0.1
+	MaxRecipientsPerImport     = 500000
 )
 
-// StartCampaign launches the sending process with a worker pool
-// Anti-spam: Validates domain DKIM before starting
+// StartCampaign starts sending emails for a campaign
 func (cs *CampaignService) StartCampaign(campaignID uint) error {
 	var campaign models.Campaign
 	if err := cs.Store.DB.Preload("Sender").Preload("Sender.Domain").First(&campaign, campaignID).Error; err != nil {

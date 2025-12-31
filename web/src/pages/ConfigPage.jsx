@@ -1,11 +1,11 @@
 import React, { useState } from "react";
-import { 
-  ServerCog, 
-  Play, 
-  Eye, 
-  FileCode, 
-  Save, 
-  AlertTriangle 
+import {
+  ServerCog,
+  Play,
+  Eye,
+  FileCode,
+  Save,
+  AlertTriangle
 } from "lucide-react";
 import { previewConfig, applyConfig } from "../api";
 import { cn } from "../lib/utils";
@@ -32,7 +32,7 @@ export default function ConfigPage() {
   };
 
   const handleApply = async () => {
-    if (!window.confirm("This will overwrite configuration files and restart the KumoMTA service. Continue?")) return;
+    if (!window.confirm("This will overwrite configuration files and restart the MTA service. Continue?")) return;
     setBusy(true);
     setMsg("");
     setError(false);
@@ -57,7 +57,7 @@ export default function ConfigPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Configuration</h1>
-          <p className="text-muted-foreground">Generate and apply KumoMTA policy files.</p>
+          <p className="text-muted-foreground">Generate and apply MTA policy files.</p>
         </div>
         <div className="flex gap-2">
           <button

@@ -62,7 +62,6 @@ func (rl *RateLimiter) cleanupVisitors() {
 
 func (rl *RateLimiter) Limit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Get the real client IP, respecting proxy headers if configured
 		ip := GetRealIP(r)
 
 		limiter := rl.getVisitor(ip)
@@ -74,28 +73,23 @@ func (rl *RateLimiter) Limit(next http.Handler) http.Handler {
 	})
 }
 
-// GetRealIP extracts the real client IP from the request
-// It respects X-Forwarded-For and X-Real-IP headers when behind trusted proxies
+// GetRealIP extracts the client IP from the request
 func GetRealIP(r *http.Request) string {
 	cfg := config.Get()
 
-	// Get the direct connection IP
 	remoteIP, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		remoteIP = r.RemoteAddr
 	}
 
-	// If proxy trust is not enabled, just return the direct IP
 	if !cfg.TrustProxy {
 		return remoteIP
 	}
 
-	// Check if the direct connection is from a trusted proxy
 	if !cfg.IsTrustedProxy(remoteIP) {
 		return remoteIP
 	}
 
-	// Try X-Forwarded-For first (standard header)
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		parts := strings.Split(xff, ",")
 		for _, part := range parts {
@@ -108,7 +102,6 @@ func GetRealIP(r *http.Request) string {
 		}
 	}
 
-	// Try X-Real-IP (common with nginx)
 	if xrip := r.Header.Get("X-Real-IP"); xrip != "" {
 		ip := strings.TrimSpace(xrip)
 		if parsedIP := net.ParseIP(ip); parsedIP != nil {
@@ -121,9 +114,11 @@ func GetRealIP(r *http.Request) string {
 	return remoteIP
 }
 
-// Specific limiters for different endpoints
+// Rate limiters for different endpoint types
 var (
-	AuthLimiter    = NewRateLimiter(rate.Every(time.Second), 5)
-	GeneralLimiter = NewRateLimiter(rate.Every(100*time.Millisecond), 100)
-	VerifyLimiter  = NewRateLimiter(rate.Every(time.Second), 2)
+	AuthLimiter     = NewRateLimiter(rate.Every(2*time.Second), 3)
+	GeneralLimiter  = NewRateLimiter(rate.Every(100*time.Millisecond), 100)
+	VerifyLimiter   = NewRateLimiter(rate.Every(time.Second), 2)
+	TrackingLimiter = NewRateLimiter(rate.Every(100*time.Millisecond), 20)
+	ImportLimiter   = NewRateLimiter(rate.Every(5*time.Second), 2)
 )

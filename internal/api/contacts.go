@@ -2,7 +2,9 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -30,7 +32,9 @@ func (h *ContactHandler) buildVerifierOpts() core.VerifierOptions {
 		if s.MainHostname != "" {
 			opts.HeloHost = s.MainHostname
 		}
-		opts.ProxyURL = s.ProxyURL
+		if s.ProxyURL != "" {
+			opts.ProxyURLs = append(opts.ProxyURLs, s.ProxyURL)
+		}
 		opts.ReacherURL = s.ReacherURL
 		opts.ReacherAPIKey = s.ReacherAPIKey
 		opts.ReacherBinPath = s.ReacherBinPath
@@ -40,6 +44,26 @@ func (h *ContactHandler) buildVerifierOpts() core.VerifierOptions {
 	if ips, err := h.Store.ListSystemIPs(); err == nil {
 		for _, ip := range ips {
 			opts.SourceIPs = append(opts.SourceIPs, ip.Value)
+		}
+	}
+
+	// Fetch Active Proxies form DB
+	var proxies []models.Proxy
+	if err := h.Store.DB.Where("is_active = ?", true).Order("priority ASC").Find(&proxies).Error; err == nil {
+		for _, p := range proxies {
+			protocol := p.Type
+			if protocol == "" {
+				protocol = "socks5"
+			}
+
+			auth := ""
+			if p.Username != "" {
+				auth = url.QueryEscape(p.Username) + ":" + url.QueryEscape(p.Password) + "@"
+			}
+
+			// Construct URL: scheme://user:pass@host:port
+			pURL := fmt.Sprintf("%s://%s%s:%d", protocol, auth, p.Host, p.Port)
+			opts.ProxyURLs = append(opts.ProxyURLs, pURL)
 		}
 	}
 
@@ -95,7 +119,7 @@ func (h *ContactHandler) HandleVerifyBatch(w http.ResponseWriter, r *http.Reques
 	}
 
 	results := core.VerifyEmailBatch(req.Emails, opts, concurrency)
-	
+
 	// Summary stats
 	summary := map[string]int{
 		"safe":    0,

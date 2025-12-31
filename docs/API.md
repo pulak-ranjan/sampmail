@@ -603,6 +603,69 @@ Content-Type: application/json
 ```
 
 ---
+## Proxy Management
+
+### List Proxies
+
+```http
+GET /api/proxies
+```
+
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "host": "1.2.3.4",
+    "port": 1080,
+    "protocol": "socks5",
+    "username": "user",
+    "enabled": true,
+    "failure_count": 0
+  }
+]
+```
+
+### Create Proxy
+
+```http
+POST /api/proxies
+Content-Type: application/json
+
+{
+  "host": "1.2.3.4",
+  "port": 1080,
+  "protocol": "socks5",
+  "username": "optional_user",
+  "password": "optional_password"
+}
+```
+
+### Update Proxy
+
+```http
+PUT /api/proxies/{id}
+Content-Type: application/json
+
+{
+  "enabled": false,
+  "port": 1081
+}
+```
+
+### Test Proxy
+
+```http
+POST /api/proxies/{id}/test
+```
+
+### Delete Proxy
+
+```http
+DELETE /api/proxies/{id}
+```
+
+---
 
 ## System
 

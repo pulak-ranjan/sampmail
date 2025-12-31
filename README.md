@@ -87,15 +87,17 @@ SampMail is a powerful, self-hosted email marketing platform designed for busine
 - GDPR-ready unsubscribe
 
 ### 🛠 Infrastructure
+- **Powered by KumoMTA** (High-performance delivery engine)
 - Multi-domain support
 - IP warmup management
 - SMTP connection pooling
 - Circuit breaker patterns
 - Health monitoring
+- **Proxy Rotation Manager** (SOCKS5/HTTP support)
 
 ### 🆕 V2 Features
 - Multi-tenant organizations
-- AI-powered template generation
+- **AI-powered Agent** (OpenAI, DeepSeek, Google Gemini)
 - Advanced personalization engine
 - Subscriber list management
 - Enhanced API with pagination

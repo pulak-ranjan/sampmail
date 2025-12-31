@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { 
-  Globe, 
-  Mail, 
-  Cpu, 
-  MemoryStick, 
-  Server, 
-  Activity, 
-  ShieldAlert, 
-  Sparkles 
+import {
+  Globe,
+  Mail,
+  Cpu,
+  MemoryStick,
+  Server,
+  Activity,
+  ShieldAlert,
+  Sparkles
 } from "lucide-react";
 import { getDashboardStats, getAIInsights } from "../api";
 import { cn } from "../lib/utils";
@@ -51,7 +51,7 @@ export default function Dashboard() {
           <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
           <p className="text-muted-foreground">Overview of your email infrastructure.</p>
         </div>
-        <button 
+        <button
           onClick={getAI}
           disabled={loading}
           className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-colors shadow-sm"
@@ -89,7 +89,7 @@ export default function Dashboard() {
             Service Status
           </h3>
           <div className="space-y-4">
-            <ServiceRow name="KumoMTA" status={stats.kumo_status} />
+            <ServiceRow name="MTA Service" status={stats.kumo_status} />
             <ServiceRow name="Dovecot" status={stats.dovecot_status} />
             <ServiceRow name="Fail2Ban" status={stats.f2b_status} />
           </div>

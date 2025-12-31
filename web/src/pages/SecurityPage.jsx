@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import QRCode from 'qrcode';
-import { 
-  Shield, 
-  Smartphone, 
-  Monitor, 
-  LogOut, 
-  Key, 
-  CheckCircle2, 
+import {
+  Shield,
+  Smartphone,
+  Monitor,
+  LogOut,
+  Key,
+  CheckCircle2,
   AlertOctagon,
   ScanLine
 } from 'lucide-react';
@@ -25,7 +25,7 @@ export default function SecurityPage() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const token = localStorage.getItem('kumoui_token');
+  const token = localStorage.getItem('sampmail_token');
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
   useEffect(() => { fetchUser(); fetchSessions(); }, []);
@@ -125,13 +125,13 @@ export default function SecurityPage() {
       )}
 
       <div className="grid lg:grid-cols-2 gap-6">
-        
+
         {/* 2FA Card */}
         <div className="bg-card border rounded-xl p-6 shadow-sm h-fit">
           <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
             <Shield className="w-5 h-5 text-primary" /> Two-Factor Authentication
           </h3>
-          
+
           {user?.has_2fa ? (
             <div className="space-y-6">
               <div className="flex items-center gap-3 p-4 bg-green-500/10 border border-green-500/20 rounded-lg text-green-700 dark:text-green-400">
@@ -203,7 +203,7 @@ export default function SecurityPage() {
           <p className="text-sm text-muted-foreground mb-4">
             You are logged in on these devices. The system automatically rotates old sessions.
           </p>
-          
+
           <div className="space-y-1">
             {sessions.map((sess, i) => {
               const Icon = getDeviceIcon(sess.user_agent);

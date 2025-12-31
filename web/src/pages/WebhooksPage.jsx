@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Webhook, 
-  Save, 
-  Activity, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Play, 
-  ShieldAlert, 
+import {
+  Webhook,
+  Save,
+  Activity,
+  CheckCircle2,
+  AlertTriangle,
+  Play,
+  ShieldAlert,
   Search,
   Bell,
   History
@@ -21,10 +21,10 @@ export default function WebhooksPage() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const token = localStorage.getItem('kumoui_token');
+  const token = localStorage.getItem('sampmail_token');
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-  useEffect(() => { 
+  useEffect(() => {
     Promise.all([fetchSettings(), fetchLogs()]).finally(() => setLoading(false));
   }, []);
 
@@ -96,27 +96,27 @@ export default function WebhooksPage() {
       )}
 
       <div className="grid lg:grid-cols-3 gap-6">
-        
+
         {/* Settings Column */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-card border rounded-xl p-6 shadow-sm">
             <h3 className="font-semibold mb-6 flex items-center gap-2">
               <Webhook className="w-4 h-4 text-muted-foreground" /> Configuration
             </h3>
-            
+
             <form onSubmit={saveSettings} className="space-y-5">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Webhook URL</label>
                 <div className="relative">
-                  <input 
-                    type="url" 
-                    value={settings.webhook_url} 
-                    onChange={e => setSettings({...settings, webhook_url: e.target.value})}
-                    placeholder="https://hooks.slack.com/services/..." 
-                    className="w-full h-10 pl-3 pr-24 rounded-md border bg-background text-sm focus:ring-2 focus:ring-ring" 
+                  <input
+                    type="url"
+                    value={settings.webhook_url}
+                    onChange={e => setSettings({ ...settings, webhook_url: e.target.value })}
+                    placeholder="https://hooks.slack.com/services/..."
+                    className="w-full h-10 pl-3 pr-24 rounded-md border bg-background text-sm focus:ring-2 focus:ring-ring"
                   />
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={testWebhook}
                     disabled={testing}
                     className="absolute right-1 top-1 h-8 px-3 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded text-xs font-medium transition-colors"
@@ -131,23 +131,23 @@ export default function WebhooksPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Bounce Threshold (%)</label>
                   <div className="flex items-center gap-3">
-                    <input 
-                      type="number" min="1" max="100" 
-                      value={settings.bounce_alert_pct} 
-                      onChange={e => setSettings({...settings, bounce_alert_pct: +e.target.value})}
-                      className="w-20 h-10 rounded-md border bg-background px-3 text-sm focus:ring-2 focus:ring-ring" 
+                    <input
+                      type="number" min="1" max="100"
+                      value={settings.bounce_alert_pct}
+                      onChange={e => setSettings({ ...settings, bounce_alert_pct: +e.target.value })}
+                      className="w-20 h-10 rounded-md border bg-background px-3 text-sm focus:ring-2 focus:ring-ring"
                     />
                     <span className="text-sm text-muted-foreground">Trigger alert if bounce rate exceeds this value.</span>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3 p-4 rounded-lg border bg-muted/20">
-                  <input 
-                    type="checkbox" 
-                    id="enabled" 
-                    checked={settings.webhook_enabled} 
-                    onChange={e => setSettings({...settings, webhook_enabled: e.target.checked})}
-                    className="h-5 w-5 rounded border-input text-primary focus:ring-primary" 
+                  <input
+                    type="checkbox"
+                    id="enabled"
+                    checked={settings.webhook_enabled}
+                    onChange={e => setSettings({ ...settings, webhook_enabled: e.target.checked })}
+                    className="h-5 w-5 rounded border-input text-primary focus:ring-primary"
                   />
                   <label htmlFor="enabled" className="text-sm font-medium cursor-pointer select-none">
                     Enable Notifications
@@ -157,9 +157,9 @@ export default function WebhooksPage() {
               </div>
 
               <div className="pt-2">
-                <button 
-                  type="submit" 
-                  disabled={saving} 
+                <button
+                  type="submit"
+                  disabled={saving}
                   className="flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md text-sm font-medium transition-colors"
                 >
                   {saving ? <Activity className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -191,8 +191,8 @@ export default function WebhooksPage() {
                         <code className="text-xs text-muted-foreground truncate max-w-[200px] sm:max-w-md">{log.response || '-'}</code>
                         <span className={cn(
                           "text-[10px] px-1.5 py-0.5 rounded font-mono font-medium",
-                          log.status >= 200 && log.status < 300 
-                            ? "bg-green-500/10 text-green-600" 
+                          log.status >= 200 && log.status < 300
+                            ? "bg-green-500/10 text-green-600"
                             : "bg-red-500/10 text-red-600"
                         )}>
                           {log.status}
@@ -209,29 +209,29 @@ export default function WebhooksPage() {
         {/* Actions Column */}
         <div className="lg:col-span-1 space-y-4">
           <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider pl-1">Manual Triggers</h3>
-          
-          <ActionCard 
-            title="Check Bounces" 
-            desc="Analyze current bounce rates immediately." 
-            icon={Activity} 
+
+          <ActionCard
+            title="Check Bounces"
+            desc="Analyze current bounce rates immediately."
+            icon={Activity}
             onClick={() => triggerAction('/api/webhooks/check-bounces', 'Bounce check triggered')}
             color="text-amber-500"
             bgColor="bg-amber-500/10"
           />
 
-          <ActionCard 
-            title="Check IP Blacklists" 
-            desc="Scan RBLs for all system IPs." 
-            icon={Search} 
+          <ActionCard
+            title="Check IP Blacklists"
+            desc="Scan RBLs for all system IPs."
+            icon={Search}
             onClick={() => triggerAction('/api/system/check-blacklist', 'Blacklist check started')}
             color="text-red-500"
             bgColor="bg-red-500/10"
           />
 
-          <ActionCard 
-            title="Security Audit" 
-            desc="Check file permissions and ports." 
-            icon={ShieldAlert} 
+          <ActionCard
+            title="Security Audit"
+            desc="Check file permissions and ports."
+            icon={ShieldAlert}
             onClick={() => triggerAction('/api/system/check-security', 'Security audit started')}
             color="text-purple-500"
             bgColor="bg-purple-500/10"
@@ -256,7 +256,7 @@ export default function WebhooksPage() {
 
 function ActionCard({ title, desc, icon: Icon, onClick, color, bgColor }) {
   return (
-    <button 
+    <button
       onClick={onClick}
       className="w-full text-left bg-card hover:bg-muted/50 border rounded-xl p-4 transition-all shadow-sm hover:shadow-md group"
     >

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -181,9 +182,11 @@ func (s *Server) handleCheckSecurity(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "started", "message": "Security audit started. Report will be sent via webhook."})
 }
 
-// POST /api/system/action/block-ip
+// handleBlockIP blocks an IP address via firewall
 func (s *Server) handleBlockIP(w http.ResponseWriter, r *http.Request) {
-	var req struct { IP string `json:"ip"` }
+	var req struct {
+		IP string `json:"ip"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 		return
@@ -195,34 +198,39 @@ func (s *Server) handleBlockIP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 🛡️ SAFETY CHECK: Load settings to prevent blocking critical IPs
-	settings, err := s.Store.GetSettings()
-	if err == nil && settings != nil {
-		// 1. Check Main Server IP
-		if ip == settings.MainServerIP {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "SAFETY: Cannot block the main server IP."})
-			return
-		}
-		// 2. Check Relay IPs (MailWizz)
-		if strings.Contains(settings.MailWizzIP, ip) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "SAFETY: Cannot block a configured Relay IP."})
-			return
-		}
-	}
-
-	// 3. Check Localhost
-	if ip == "127.0.0.1" || strings.HasPrefix(ip, "127.") {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "SAFETY: Cannot block localhost."})
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid IP address format"})
 		return
 	}
 
-	// Apply Block via Core
+	settings, err := s.Store.GetSettings()
+	if err == nil && settings != nil {
+		if ip == settings.MainServerIP {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot block the main server IP"})
+			return
+		}
+		if strings.Contains(settings.MailWizzIP, ip) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot block a configured relay IP"})
+			return
+		}
+	}
+
+	if parsedIP.IsLoopback() {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot block localhost"})
+		return
+	}
+
+	if parsedIP.IsPrivate() || parsedIP.IsLinkLocalUnicast() {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot block private IP addresses"})
+		return
+	}
+
 	if err := core.BlockIP(ip); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 
-	// Audit Log
 	s.WS.SendAuditLog("Security Block", "Blocked IP: "+ip, s.getUser(r))
 	
 	writeJSON(w, http.StatusOK, map[string]string{"status": "blocked", "ip": ip})

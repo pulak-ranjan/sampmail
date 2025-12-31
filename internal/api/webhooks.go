@@ -4,14 +4,14 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/pulak-ranjan/sampmail/internal/core"
 	"github.com/pulak-ranjan/sampmail/internal/models"
 )
 
-// GET /api/webhooks/settings
+// handleGetWebhookSettings returns current webhook configuration
 func (s *Server) handleGetWebhookSettings(w http.ResponseWriter, r *http.Request) {
 	settings, err := s.Store.GetSettings()
 	if err != nil {
-		// Return defaults if not found so the UI doesn't break
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"webhook_url":      "",
 			"webhook_enabled":  false,
@@ -27,7 +27,7 @@ func (s *Server) handleGetWebhookSettings(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// POST /api/webhooks/settings
+// handleSetWebhookSettings saves webhook configuration
 func (s *Server) handleSetWebhookSettings(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		WebhookURL     string  `json:"webhook_url"`
@@ -42,15 +42,20 @@ func (s *Server) handleSetWebhookSettings(w http.ResponseWriter, r *http.Request
 
 	settings, err := s.Store.GetSettings()
 	if err != nil {
-		// Create new settings if none exist
 		settings = &models.AppSettings{}
+	}
+
+	if req.WebhookURL != "" {
+		if err := core.ValidateWebhookURL(req.WebhookURL); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid webhook URL: " + err.Error()})
+			return
+		}
 	}
 
 	settings.WebhookURL = req.WebhookURL
 	settings.WebhookEnabled = req.WebhookEnabled
 	settings.BounceAlertPct = req.BounceAlertPct
 
-	// Safety default
 	if settings.BounceAlertPct <= 0 {
 		settings.BounceAlertPct = 5.0
 	}
@@ -63,7 +68,7 @@ func (s *Server) handleSetWebhookSettings(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]string{"status": "saved"})
 }
 
-// POST /api/webhooks/test
+// handleTestWebhook sends a test message to the webhook URL
 func (s *Server) handleTestWebhook(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		WebhookURL string `json:"webhook_url"`
@@ -79,7 +84,11 @@ func (s *Server) handleTestWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Use the WebhookService attached to Server
+	if err := core.ValidateWebhookURL(req.WebhookURL); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid webhook URL: " + err.Error()})
+		return
+	}
+
 	if err := s.WS.SendTestWebhook(req.WebhookURL); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
@@ -88,9 +97,8 @@ func (s *Server) handleTestWebhook(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "sent"})
 }
 
-// GET /api/webhooks/logs
+// handleGetWebhookLogs returns recent webhook logs
 func (s *Server) handleGetWebhookLogs(w http.ResponseWriter, r *http.Request) {
-	// Fetch last 50 logs
 	logs, err := s.Store.ListWebhookLogs(50)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to get logs"})
@@ -100,9 +108,8 @@ func (s *Server) handleGetWebhookLogs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, logs)
 }
 
-// POST /api/webhooks/check-bounces
+// handleCheckBounces triggers bounce rate check
 func (s *Server) handleCheckBounces(w http.ResponseWriter, r *http.Request) {
-	// Trigger the logic in core/webhook.go
 	if err := s.WS.CheckBounceRates(); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to check bounces"})
 		return

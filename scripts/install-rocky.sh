@@ -88,9 +88,18 @@ generate_password() {
     openssl rand -base64 24 | tr -d '/+=' | head -c 24
 }
 
-# Step 1: Update system and install dependencies
-log_info "Installing dependencies..."
-$PKG_MGR install -y curl wget unzip ca-certificates policycoreutils-python-utils
+# Step 1: Install EPEL and base dependencies
+log_info "Installing EPEL release and dependencies..."
+$PKG_MGR install -y epel-release
+$PKG_MGR install -y curl wget unzip ca-certificates policycoreutils-python-utils \
+    dnf-plugins-core bind-utils firewalld fail2ban fail2ban-firewalld nano
+
+# Enable firewalld and fail2ban early
+systemctl enable --now firewalld 2>/dev/null || true
+systemctl enable --now fail2ban 2>/dev/null || true
+
+# Disable postfix if present (conflicts with SMTP)
+systemctl disable --now postfix 2>/dev/null || true
 
 # Step 2: Install PostgreSQL
 log_info "Installing PostgreSQL..."
@@ -212,6 +221,42 @@ if command -v getenforce &> /dev/null && [[ $(getenforce) != "Disabled" ]]; then
     log_success "SELinux configured"
 fi
 
+# Helper: Find a free port starting from a base port
+find_free_port() {
+    local port=$1
+    while ss -tuln | grep -q ":$port "; do
+        ((port++))
+    done
+    echo "$port"
+}
+
+# Helper: Check if a specific port is in use
+is_port_occupied() {
+    local port=$1
+    ss -tuln | grep -q ":$port "
+}
+
+# Step 0: Pre-flight Port Check
+log_info "Running pre-flight port checks..."
+if ! command -v ss &> /dev/null; then
+    $PKG_MGR install -y iproute
+fi
+
+if is_port_occupied 80; then
+    log_warn "Port 80 is in use. Nginx might fail to start if you don't stop the existing service."
+fi
+
+# Detect dynamic ports for internal services
+REACHER_PORT=$(find_free_port 8080)
+if [[ "$REACHER_PORT" != "8080" ]]; then
+    log_warn "Port 8080 is busy. Moving Reacher to port $REACHER_PORT"
+fi
+
+SAMPMAIL_PORT=$(find_free_port 9000)
+if [[ "$SAMPMAIL_PORT" != "9000" ]]; then
+    log_warn "Port 9000 is busy. Moving SampMail Backend to port $SAMPMAIL_PORT"
+fi
+
 # Step 8: Generate config
 log_info "Creating configuration..."
 SECRET=$(openssl rand -base64 32)
@@ -226,8 +271,8 @@ cat > "$CONFIG_FILE" << EOF
 SAMPMAIL_SECRET=$SECRET
 
 # Server Settings
-# Listen on all interfaces for external access
-SAMPMAIL_LISTEN_ADDR=0.0.0.0:9000
+# SECURITY: Bind only to localhost. Nginx handles external traffic.
+SAMPMAIL_LISTEN_ADDR=127.0.0.1:$SAMPMAIL_PORT
 SAMPMAIL_ENV=production
 
 # Data directories
@@ -248,7 +293,7 @@ SAMPMAIL_PG_DATABASE=${PG_DATABASE}
 SAMPMAIL_PG_SSLMODE=disable
 
 # Reacher (Email Verification)
-REACHER_URL=http://127.0.0.1:8080
+REACHER_URL=http://127.0.0.1:$REACHER_PORT
 
 # Performance
 SAMPMAIL_CAMPAIGN_WORKERS=50
@@ -256,11 +301,76 @@ SAMPMAIL_DB_MAX_OPEN_CONNS=100
 SAMPMAIL_DB_MAX_IDLE_CONNS=10
 EOF
 
-chmod 600 "$CONFIG_FILE"
+chmod 640 "$CONFIG_FILE"
 chown root:sampmail "$CONFIG_FILE"
 log_success "Configuration saved to $CONFIG_FILE"
 
-# Step 9: Create systemd services
+# Step 9: Install nginx for frontend
+log_info "Installing nginx..."
+if ! command -v nginx &> /dev/null; then
+    $PKG_MGR install -y nginx
+    log_success "Nginx installed"
+else
+    log_info "Nginx already installed"
+fi
+
+# Configure nginx to serve frontend and proxy API
+cat > /etc/nginx/conf.d/sampmail.conf << NGINX
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+
+    root /opt/sampmail/web;
+    index index.html;
+
+    # Gzip compression
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
+
+    # Frontend - serve static files, fallback to index.html for SPA
+    location / {
+        try_files \$uri \$uri/ /index.html;
+    }
+
+    # API - proxy to backend
+    location /api/ {
+        proxy_pass http://127.0.0.1:$SAMPMAIL_PORT;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+
+    # Health check endpoint
+    location /health {
+        proxy_pass http://127.0.0.1:$SAMPMAIL_PORT;
+        proxy_set_header Host \$host;
+    }
+}
+NGINX
+
+# Allow nginx to read web files (SELinux)
+if command -v setsebool &> /dev/null; then
+    setsebool -P httpd_can_network_connect 1 2>/dev/null || true
+    chcon -Rt httpd_sys_content_t /opt/sampmail/web 2>/dev/null || true
+fi
+
+# Remove default nginx config if exists
+rm -f /etc/nginx/conf.d/default.conf 2>/dev/null || true
+
+systemctl enable nginx
+log_success "Nginx configured"
+
+# Install Certbot for Let's Encrypt SSL
+log_info "Installing Certbot for SSL..."
+$PKG_MGR install -y certbot python3-certbot-nginx
+log_success "Certbot installed - run 'sudo certbot --nginx' to enable HTTPS"
+
+# Step 10: Create systemd services
 log_info "Creating systemd services..."
 
 cat > /etc/systemd/system/sampmail.service << EOF
@@ -291,7 +401,7 @@ PrivateTmp=true
 WantedBy=multi-user.target
 EOF
 
-# Step 10: Setup Reacher
+# Step 11: Setup Reacher
 log_info "Setting up Reacher (email verification)..."
 
 docker pull reacherhq/backend:latest
@@ -315,32 +425,70 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
 
-# Step 11: Configure firewall
-if command -v firewall-cmd &> /dev/null; then
-    log_info "Configuring firewall..."
-    firewall-cmd --permanent --add-port=9000/tcp 2>/dev/null || true
-    firewall-cmd --permanent --add-port=25/tcp 2>/dev/null || true
-    firewall-cmd --permanent --add-port=587/tcp 2>/dev/null || true
-    firewall-cmd --permanent --add-port=80/tcp 2>/dev/null || true
-    firewall-cmd --permanent --add-port=443/tcp 2>/dev/null || true
-    firewall-cmd --reload 2>/dev/null || true
-    log_success "Firewall configured"
+# Step 12: Configure firewall ports
+log_info "Configuring firewall ports..."
+
+# Standard SMTP and web ports
+firewall-cmd --permanent --add-service=http 2>/dev/null || true
+firewall-cmd --permanent --add-service=https 2>/dev/null || true
+firewall-cmd --permanent --add-port=25/tcp 2>/dev/null || true
+firewall-cmd --permanent --add-port=587/tcp 2>/dev/null || true
+firewall-cmd --permanent --add-port=465/tcp 2>/dev/null || true
+
+# SECURITY: Close port 9000 to public - only nginx accesses backend locally
+firewall-cmd --permanent --remove-port=9000/tcp 2>/dev/null || true
+
+firewall-cmd --reload 2>/dev/null || true
+log_success "Firewall ports configured"
+
+# SELinux: Allow nginx to proxy to backend
+if command -v semanage &> /dev/null; then
+    semanage port -a -t http_port_t -p tcp 9000 2>/dev/null || true
 fi
 
-# Step 12: Install KumoMTA (if requested)
+# Step 13: Install KumoMTA (if requested)
 if [[ "$INSTALL_KUMOMTA" == true ]]; then
     log_info "Installing KumoMTA..."
-    curl -fsSL https://openrepo.kumomta.com/files/kumomta-repo-setup.rpm.sh | bash
-    $PKG_MGR install -y kumomta
-    systemctl enable kumomta
-    log_success "KumoMTA installed"
+
+    # Try multiple installation methods
+    KUMOMTA_INSTALLED=false
+
+    # Method 1: Official repo using dnf config-manager (same as kumomta-ui)
+    if dnf config-manager --add-repo https://openrepo.kumomta.com/files/kumomta-rocky.repo 2>/dev/null; then
+        if $PKG_MGR install -y kumomta 2>/dev/null; then
+            KUMOMTA_INSTALLED=true
+            log_success "KumoMTA installed from official repo"
+        fi
+    fi
+
+    # Method 2: Try direct from GitHub releases
+    if [[ "$KUMOMTA_INSTALLED" != true ]]; then
+        log_warn "Official repo failed. Trying GitHub releases..."
+        KUMOMTA_URL="https://github.com/KumoCorp/kumomta/releases/latest/download/kumomta-el9.x86_64.rpm"
+        if curl -fsSL -o /tmp/kumomta.rpm "$KUMOMTA_URL" 2>/dev/null; then
+            if $PKG_MGR install -y /tmp/kumomta.rpm 2>/dev/null; then
+                KUMOMTA_INSTALLED=true
+                log_success "KumoMTA installed from GitHub"
+            fi
+        fi
+    fi
+
+    # Method 3: Provide manual instructions
+    if [[ "$KUMOMTA_INSTALLED" != true ]]; then
+        log_warn "Could not auto-install KumoMTA. Please install manually:"
+        echo "    See: https://docs.kumomta.com/installation/linux/"
+    else
+        systemctl enable kumomta 2>/dev/null || true
+        mkdir -p /opt/kumomta/etc/policy 2>/dev/null || true
+    fi
 fi
 
-# Step 13: Enable and start services
+# Step 14: Enable and start services
 systemctl daemon-reload
 systemctl enable reacher sampmail
 
 log_info "Starting services..."
+systemctl start nginx
 systemctl start reacher
 sleep 3
 systemctl start sampmail
@@ -351,6 +499,7 @@ sleep 5
 # Check service status
 SAMPMAIL_STATUS=$(systemctl is-active sampmail 2>/dev/null || echo "failed")
 REACHER_STATUS=$(systemctl is-active reacher 2>/dev/null || echo "failed")
+NGINX_STATUS=$(systemctl is-active nginx 2>/dev/null || echo "failed")
 
 # Get server IP
 SERVER_IP=$(hostname -I | awk '{print $1}')
@@ -358,15 +507,16 @@ SERVER_IP=$(hostname -I | awk '{print $1}')
 # Done!
 echo ""
 echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-echo -e "${GREEN}  SampMail Installation Complete!${NC}"
+echo -e "${GREEN}  ✓ SampMail Installation Complete!${NC}"
 echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
 echo ""
 echo "  Services:"
 echo "    - SampMail:   $SAMPMAIL_STATUS"
+echo "    - Nginx:      $NGINX_STATUS"
 echo "    - Reacher:    $REACHER_STATUS"
 echo "    - PostgreSQL: $(systemctl is-active postgresql-15 2>/dev/null || systemctl is-active postgresql 2>/dev/null || echo 'unknown')"
 echo ""
-echo -e "  ${GREEN}Access UI:${NC} http://${SERVER_IP}:9000"
+echo -e "  ${GREEN}Access UI:${NC} http://${SERVER_IP}"
 echo ""
 echo "  Database Credentials (saved in $CONFIG_FILE):"
 echo "    - Host:     127.0.0.1"
@@ -385,11 +535,12 @@ echo -e "${YELLOW}  Next Steps:${NC}"
 if [[ "$INSTALL_KUMOMTA" != true ]]; then
     echo "    1. Install KumoMTA: sudo bash install-rocky.sh --with-kumomta"
     echo "    2. Configure your domain in SampMail UI"
-    echo "    3. Setup reverse proxy (nginx) for HTTPS"
+    echo "    3. Setup SSL with: sudo certbot --nginx"
 else
     echo "    1. Configure KumoMTA: /opt/kumomta/etc/policy"
     echo "    2. Configure your domain in SampMail UI"
-    echo "    3. Setup reverse proxy (nginx) for HTTPS"
+    echo "    3. Setup SSL with: sudo certbot --nginx"
 fi
 echo ""
 echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -14,6 +15,110 @@ import (
 	"github.com/pulak-ranjan/sampmail/internal/models"
 	"github.com/pulak-ranjan/sampmail/internal/store"
 )
+
+// ValidateWebhookURL validates webhook URL and blocks internal/private IPs
+func ValidateWebhookURL(webhookURL string) error {
+	if webhookURL == "" {
+		return nil // Empty is allowed (disabled)
+	}
+
+	parsed, err := url.Parse(webhookURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL format")
+	}
+
+	if parsed.Scheme != "https" && parsed.Scheme != "http" {
+		return fmt.Errorf("URL must use http or https scheme")
+	}
+
+	hostname := parsed.Hostname()
+	if hostname == "" {
+		return fmt.Errorf("URL must have a hostname")
+	}
+
+	lowerHost := strings.ToLower(hostname)
+	if lowerHost == "localhost" || lowerHost == "127.0.0.1" || lowerHost == "::1" {
+		return fmt.Errorf("localhost URLs are not allowed")
+	}
+
+	ips, err := net.LookupIP(hostname)
+	if err != nil {
+		if isKnownWebhookService(hostname) {
+			return nil
+		}
+		return fmt.Errorf("could not resolve hostname: %s", hostname)
+	}
+
+	for _, ip := range ips {
+		if isInternalIP(ip) {
+			return fmt.Errorf("webhook URL resolves to internal IP (%s)", ip.String())
+		}
+	}
+
+	return nil
+}
+
+// isKnownWebhookService returns true if hostname is a trusted webhook provider
+func isKnownWebhookService(hostname string) bool {
+	trustedDomains := []string{
+		"discord.com",
+		"discordapp.com",
+		"slack.com",
+		"hooks.slack.com",
+		"api.telegram.org",
+		"webhook.site",
+		"zapier.com",
+		"hooks.zapier.com",
+		"ifttt.com",
+		"maker.ifttt.com",
+	}
+
+	lowerHost := strings.ToLower(hostname)
+	for _, domain := range trustedDomains {
+		if lowerHost == domain || strings.HasSuffix(lowerHost, "."+domain) {
+			return true
+		}
+	}
+	return false
+}
+
+// isInternalIP returns true if IP is private, loopback, or reserved
+func isInternalIP(ip net.IP) bool {
+	if ip == nil {
+		return true
+	}
+
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+		return true
+	}
+
+	// Additional reserved ranges
+	internalRanges := []string{
+		"169.254.0.0/16",
+		"100.64.0.0/10",
+		"192.0.0.0/24",
+		"192.0.2.0/24",
+		"198.18.0.0/15",
+		"198.51.100.0/24",
+		"203.0.113.0/24",
+		"224.0.0.0/4",
+		"240.0.0.0/4",
+		"fc00::/7",
+		"fe80::/10",
+	}
+
+	for _, cidr := range internalRanges {
+		_, network, err := net.ParseCIDR(cidr)
+		if err != nil {
+			continue
+		}
+		if network.Contains(ip) {
+			return true
+		}
+	}
+
+	return false
+}
 
 // WebhookService handles sending notifications to Slack/Discord
 type WebhookService struct {

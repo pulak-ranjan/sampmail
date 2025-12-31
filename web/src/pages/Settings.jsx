@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { 
-  Save, 
-  Server, 
-  Globe, 
-  Network, 
-  Bot, 
-  Key, 
-  Loader2 
+import {
+  Save,
+  Server,
+  Globe,
+  Network,
+  Bot,
+  Key,
+  Loader2
 } from "lucide-react";
 import { getSettings, saveSettings } from "../api";
 import { cn } from "../lib/utils";
@@ -61,13 +61,13 @@ export default function Settings() {
       </div>
 
       <form onSubmit={onSubmit} className="space-y-8">
-        
+
         {/* Server Config Section */}
         <div className="space-y-4">
           <h3 className="text-lg font-semibold flex items-center gap-2 border-b pb-2">
             <Server className="w-5 h-5" /> Server Configuration
           </h3>
-          
+
           <div className="grid gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Main Hostname</label>
@@ -116,7 +116,7 @@ export default function Settings() {
           <h3 className="text-lg font-semibold flex items-center gap-2 border-b pb-2">
             <Bot className="w-5 h-5" /> AI Integration
           </h3>
-          
+
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">AI Provider</label>
@@ -127,8 +127,9 @@ export default function Settings() {
                 className="w-full h-10 rounded-md border bg-background px-3 text-sm focus:ring-2 focus:ring-ring"
               >
                 <option value="">Select Provider</option>
-                <option value="openai">OpenAI (GPT-3.5)</option>
-                <option value="deepseek">DeepSeek</option>
+                <option value="openai">OpenAI (GPT-4o)</option>
+                <option value="deepseek">DeepSeek (V3)</option>
+                <option value="gemini">Google Gemini (Flash)</option>
               </select>
             </div>
 

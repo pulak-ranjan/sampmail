@@ -1,4 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
+import {
+  LayoutTemplate, Image, Type, Columns, Footprints, MousePointer2,
+  Smartphone, Monitor, Eye, Save, Sparkles, X, ArrowUp, ArrowDown,
+  Trash2, Code, GripVertical, Maximize, Facebook, Minus, Box, Layout
+} from 'lucide-react';
 
 const EmailTemplateBuilder = ({ template, onSave, onPreview }) => {
   const [blocks, setBlocks] = useState([]);
@@ -12,26 +17,26 @@ const EmailTemplateBuilder = ({ template, onSave, onPreview }) => {
   // Available content blocks
   const contentBlocks = {
     structure: [
-      { type: 'header', label: 'Header', icon: '📰', description: 'Logo and navigation' },
-      { type: 'hero', label: 'Hero Section', icon: '🖼️', description: 'Large image with text' },
-      { type: 'content', label: 'Content Block', icon: '📝', description: 'Text and image' },
-      { type: 'columns-2', label: '2 Columns', icon: '▯▯', description: 'Two column layout' },
-      { type: 'columns-3', label: '3 Columns', icon: '▯▯▯', description: 'Three column layout' },
-      { type: 'footer', label: 'Footer', icon: '📋', description: 'Footer with links' },
+      { type: 'header', label: 'Header', icon: LayoutTemplate, description: 'Logo and navigation' },
+      { type: 'hero', label: 'Hero Section', icon: Image, description: 'Large image with text' },
+      { type: 'content', label: 'Content Block', icon: Type, description: 'Text and image' },
+      { type: 'columns-2', label: '2 Columns', icon: Columns, description: 'Two column layout' },
+      { type: 'columns-3', label: '3 Columns', icon: Layout, description: 'Three column layout' },
+      { type: 'footer', label: 'Footer', icon: Footprints, description: 'Footer with links' },
     ],
     content: [
-      { type: 'text', label: 'Text', icon: 'T', description: 'Rich text block' },
-      { type: 'image', label: 'Image', icon: '🖼️', description: 'Image with link' },
-      { type: 'button', label: 'Button', icon: '🔘', description: 'Call to action' },
-      { type: 'divider', label: 'Divider', icon: '➖', description: 'Horizontal line' },
-      { type: 'spacer', label: 'Spacer', icon: '↕️', description: 'Empty space' },
-      { type: 'social', label: 'Social Icons', icon: '📱', description: 'Social media links' },
+      { type: 'text', label: 'Text', icon: Type, description: 'Rich text block' },
+      { type: 'image', label: 'Image', icon: Image, description: 'Image with link' },
+      { type: 'button', label: 'Button', icon: MousePointer2, description: 'Call to action' },
+      { type: 'divider', label: 'Divider', icon: Minus, description: 'Horizontal line' },
+      { type: 'spacer', label: 'Spacer', icon: Maximize, description: 'Empty space' },
+      { type: 'social', label: 'Social Icons', icon: Facebook, description: 'Social media links' },
     ],
     advanced: [
-      { type: 'video', label: 'Video', icon: '🎬', description: 'Video thumbnail' },
-      { type: 'countdown', label: 'Countdown', icon: '⏰', description: 'Timer display' },
-      { type: 'products', label: 'Products', icon: '🛒', description: 'Product grid' },
-      { type: 'menu', label: 'Menu', icon: '☰', description: 'Navigation menu' },
+      { type: 'video', label: 'Video', icon: Monitor, description: 'Video thumbnail' },
+      { type: 'countdown', label: 'Countdown', icon: Box, description: 'Timer display' },
+      { type: 'products', label: 'Products', icon: Box, description: 'Product grid' },
+      { type: 'menu', label: 'Menu', icon: GripVertical, description: 'Navigation menu' },
     ],
   };
 
@@ -300,10 +305,12 @@ const EmailTemplateBuilder = ({ template, onSave, onPreview }) => {
                   <button
                     key={block.type}
                     onClick={() => addBlock(block)}
-                    className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 text-center transition"
+                    className="p-3 bg-gray-50 rounded-lg hover:bg-white hover:shadow-md hover:ring-1 hover:ring-blue-500/20 text-center transition-all group border border-transparent"
                   >
-                    <span className="text-2xl block mb-1">{block.icon}</span>
-                    <span className="text-xs text-gray-600">{block.label}</span>
+                    <div className="flex justify-center mb-2 text-gray-400 group-hover:text-blue-600 transition-colors">
+                      <block.icon className="w-6 h-6" />
+                    </div>
+                    <span className="text-xs font-medium text-gray-600 group-hover:text-gray-900">{block.label}</span>
                   </button>
                 ))}
               </div>
@@ -313,9 +320,9 @@ const EmailTemplateBuilder = ({ template, onSave, onPreview }) => {
           {/* Variables Button */}
           <button
             onClick={() => setShowVariables(!showVariables)}
-            className="w-full p-3 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition mb-4"
+            className="w-full p-3 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition mb-4 flex items-center justify-center gap-2 text-sm font-medium"
           >
-            {'{ }'} Insert Variable
+            <Code className="w-4 h-4" /> Insert Variable
           </button>
 
           {showVariables && (
@@ -337,9 +344,9 @@ const EmailTemplateBuilder = ({ template, onSave, onPreview }) => {
           {/* AI Generate Button */}
           <button
             onClick={() => setShowAIModal(true)}
-            className="w-full p-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
+            className="w-full p-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex items-center justify-center gap-2 text-sm font-medium shadow-sm"
           >
-            ✨ Generate with AI
+            <Sparkles className="w-4 h-4" /> Generate with AI
           </button>
         </div>
       </div>
@@ -351,29 +358,31 @@ const EmailTemplateBuilder = ({ template, onSave, onPreview }) => {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setViewMode('desktop')}
-              className={`p-2 rounded ${viewMode === 'desktop' ? 'bg-blue-100 text-blue-600' : 'text-gray-500'}`}
+              className={`p-2 rounded flex items-center gap-2 ${viewMode === 'desktop' ? 'bg-blue-100 text-blue-600' : 'text-gray-500 hover:bg-gray-100'}`}
             >
-              🖥️ Desktop
+              <Monitor className="w-4 h-4" />
+              <span className="text-sm font-medium">Desktop</span>
             </button>
             <button
               onClick={() => setViewMode('mobile')}
-              className={`p-2 rounded ${viewMode === 'mobile' ? 'bg-blue-100 text-blue-600' : 'text-gray-500'}`}
+              className={`p-2 rounded flex items-center gap-2 ${viewMode === 'mobile' ? 'bg-blue-100 text-blue-600' : 'text-gray-500 hover:bg-gray-100'}`}
             >
-              📱 Mobile
+              <Smartphone className="w-4 h-4" />
+              <span className="text-sm font-medium">Mobile</span>
             </button>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => onPreview(generateHTML())}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 flex items-center gap-2 text-sm font-medium"
             >
-              👁️ Preview
+              <Eye className="w-4 h-4" /> Preview
             </button>
             <button
               onClick={handleSave}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2 text-sm font-medium shadow-sm transition-all"
             >
-              💾 Save Template
+              <Save className="w-4 h-4" /> Save Template
             </button>
           </div>
         </div>
@@ -387,7 +396,10 @@ const EmailTemplateBuilder = ({ template, onSave, onPreview }) => {
           >
             {blocks.length === 0 ? (
               <div className="p-20 text-center text-gray-400">
-                <p className="text-xl mb-2">📧 Start building your email</p>
+                <div className="flex justify-center mb-4 opacity-50">
+                  <LayoutTemplate className="w-16 h-16" />
+                </div>
+                <p className="text-xl font-semibold mb-2 text-gray-500">Start building your email</p>
                 <p>Drag blocks from the left panel</p>
               </div>
             ) : (
@@ -401,23 +413,23 @@ const EmailTemplateBuilder = ({ template, onSave, onPreview }) => {
                   <div className="absolute -right-10 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 flex flex-col gap-1">
                     <button
                       onClick={(e) => { e.stopPropagation(); moveBlock(block.id, 'up'); }}
-                      className="w-8 h-8 bg-white shadow rounded flex items-center justify-center hover:bg-gray-100"
+                      className="w-8 h-8 bg-white shadow rounded flex items-center justify-center hover:bg-gray-100 text-gray-600"
                       disabled={index === 0}
                     >
-                      ↑
+                      <ArrowUp className="w-4 h-4" />
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); moveBlock(block.id, 'down'); }}
-                      className="w-8 h-8 bg-white shadow rounded flex items-center justify-center hover:bg-gray-100"
+                      className="w-8 h-8 bg-white shadow rounded flex items-center justify-center hover:bg-gray-100 text-gray-600"
                       disabled={index === blocks.length - 1}
                     >
-                      ↓
+                      <ArrowDown className="w-4 h-4" />
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); deleteBlock(block.id); }}
-                      className="w-8 h-8 bg-red-500 text-white shadow rounded flex items-center justify-center hover:bg-red-600"
+                      className="w-8 h-8 bg-white border border-red-100 text-red-500 shadow rounded flex items-center justify-center hover:bg-red-50"
                     >
-                      ×
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
 
@@ -440,7 +452,7 @@ const EmailTemplateBuilder = ({ template, onSave, onPreview }) => {
                 onClick={() => setSelectedBlock(null)}
                 className="text-gray-400 hover:text-gray-600"
               >
-                ×
+                <X className="w-5 h-5" />
               </button>
             </div>
 
@@ -776,7 +788,10 @@ const AIGenerateModal = ({ onClose, onGenerate }) => {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl p-6 w-full max-w-lg">
-        <h2 className="text-xl font-bold mb-4">✨ Generate with AI</h2>
+        <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-purple-600" />
+          Generate with AI
+        </h2>
 
         <div className="space-y-4">
           <div>
@@ -832,8 +847,9 @@ const AIGenerateModal = ({ onClose, onGenerate }) => {
           <button
             onClick={handleGenerate}
             disabled={!prompt || loading}
-            className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+            className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
           >
+            {loading ? <Sparkles className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
             {loading ? 'Generating...' : 'Generate'}
           </button>
         </div>

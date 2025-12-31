@@ -28,7 +28,7 @@ export default function LogsPage() {
   }, [service]);
 
   const services = [
-    { id: 'kumomta', label: 'KumoMTA', icon: Mail },
+    { id: 'kumomta', label: 'MTA Service', icon: Mail },
     { id: 'dovecot', label: 'Dovecot', icon: FileText },
     { id: 'fail2ban', label: 'Fail2Ban', icon: Shield },
   ];
@@ -40,7 +40,7 @@ export default function LogsPage() {
           <h1 className="text-3xl font-bold tracking-tight">System Logs</h1>
           <p className="text-muted-foreground">View real-time journalctl output.</p>
         </div>
-        <button 
+        <button
           onClick={() => load(service)}
           disabled={busy}
           className="flex items-center gap-2 h-10 px-4 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 text-sm font-medium transition-colors"
@@ -60,8 +60,8 @@ export default function LogsPage() {
               onClick={() => setService(svc.id)}
               className={cn(
                 "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all",
-                isActive 
-                  ? "bg-background text-foreground shadow-sm" 
+                isActive
+                  ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground hover:bg-background/50"
               )}
             >

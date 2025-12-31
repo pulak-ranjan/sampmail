@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   ShieldCheck, Globe, Settings, Copy, Check, Server, Mail, FileKey, RefreshCw, AlertTriangle
 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -13,7 +13,7 @@ export default function DMARCPage() {
   const [loadingDNS, setLoadingDNS] = useState(false);
   const [message, setMessage] = useState('');
 
-  const token = localStorage.getItem('kumoui_token');
+  const token = localStorage.getItem('sampmail_token');
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
   useEffect(() => { fetchDomains(); }, []);
@@ -29,11 +29,11 @@ export default function DMARCPage() {
 
   const selectDomain = async (domain) => {
     setSelected(domain);
-    setDmarc({ 
-      policy: domain.dmarc_policy || 'none', 
-      rua: domain.dmarc_rua || '', 
-      ruf: domain.dmarc_ruf || '', 
-      percentage: domain.dmarc_percentage || 100 
+    setDmarc({
+      policy: domain.dmarc_policy || 'none',
+      rua: domain.dmarc_rua || '',
+      ruf: domain.dmarc_ruf || '',
+      percentage: domain.dmarc_percentage || 100
     });
     setDnsData(null);
     loadDNS(domain.id);
@@ -54,10 +54,10 @@ export default function DMARCPage() {
     setSaving(true);
     try {
       const res = await fetch(`/api/dmarc/${selected.id}`, { method: 'POST', headers, body: JSON.stringify(dmarc) });
-      if (res.ok) { 
-        setMessage('DMARC record updated'); 
+      if (res.ok) {
+        setMessage('DMARC record updated');
         loadDNS(selected.id);
-        fetchDomains(); 
+        fetchDomains();
       }
       else setMessage('Failed to save settings');
     } catch (e) { setMessage('Error: ' + e.message); }
@@ -86,7 +86,7 @@ export default function DMARCPage() {
       )}
 
       <div className="grid lg:grid-cols-3 gap-6">
-        
+
         {/* Column 1: Domain List */}
         <div className="bg-card border rounded-xl p-4 shadow-sm flex flex-col h-[calc(100vh-200px)]">
           <h3 className="font-semibold mb-4 flex items-center gap-2">
@@ -97,8 +97,8 @@ export default function DMARCPage() {
               <button key={d.id} onClick={() => selectDomain(d)}
                 className={cn(
                   "w-full text-left p-3 rounded-lg border transition-all flex items-center justify-between group",
-                  selected?.id === d.id 
-                    ? "bg-primary/5 border-primary text-primary" 
+                  selected?.id === d.id
+                    ? "bg-primary/5 border-primary text-primary"
                     : "bg-background border-transparent hover:bg-muted"
                 )}
               >
@@ -126,7 +126,7 @@ export default function DMARCPage() {
             <form onSubmit={saveDMARC} className="space-y-5">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Policy (p)</label>
-                <select value={dmarc.policy} onChange={e => setDmarc({...dmarc, policy: e.target.value})}
+                <select value={dmarc.policy} onChange={e => setDmarc({ ...dmarc, policy: e.target.value })}
                   className="w-full h-10 rounded-md border bg-background px-3 text-sm focus:ring-2 focus:ring-ring"
                 >
                   <option value="none">None (Monitor Only)</option>
@@ -136,20 +136,20 @@ export default function DMARCPage() {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Aggregate Email (rua)</label>
-                <input type="email" value={dmarc.rua} onChange={e => setDmarc({...dmarc, rua: e.target.value})}
+                <input type="email" value={dmarc.rua} onChange={e => setDmarc({ ...dmarc, rua: e.target.value })}
                   placeholder="mailto:dmarc@..." className="w-full h-10 rounded-md border bg-background px-3 text-sm focus:ring-2 focus:ring-ring" />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Forensic Email (ruf)</label>
-                <input type="email" value={dmarc.ruf} onChange={e => setDmarc({...dmarc, ruf: e.target.value})}
+                <input type="email" value={dmarc.ruf} onChange={e => setDmarc({ ...dmarc, ruf: e.target.value })}
                   placeholder="mailto:forensic@..." className="w-full h-10 rounded-md border bg-background px-3 text-sm focus:ring-2 focus:ring-ring" />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Percentage (pct)</label>
                 <div className="flex items-center gap-3">
-                  <input 
-                    type="range" min="0" max="100" 
-                    value={dmarc.percentage} onChange={e => setDmarc({...dmarc, percentage: +e.target.value})}
+                  <input
+                    type="range" min="0" max="100"
+                    value={dmarc.percentage} onChange={e => setDmarc({ ...dmarc, percentage: +e.target.value })}
                     className="flex-1"
                   />
                   <span className="w-12 text-right text-sm font-mono">{dmarc.percentage}%</span>
@@ -174,39 +174,39 @@ export default function DMARCPage() {
               </button>
             )}
           </div>
-          
+
           {loadingDNS ? (
             <div className="text-center py-12 text-muted-foreground">Scanning DNS records...</div>
           ) : dnsData ? (
             <div className="space-y-6">
-              <DNSSect title="A Records" 
-                recs={dnsData.generated.a} 
-                live={dnsData.live.a} 
-                icon={Server} color="text-blue-500" 
+              <DNSSect title="A Records"
+                recs={dnsData.generated.a}
+                live={dnsData.live.a}
+                icon={Server} color="text-blue-500"
                 onCopy={copyToClipboard} copied={copied}
               />
-              <DNSSect title="MX Records" 
-                recs={dnsData.generated.mx} 
-                live={dnsData.live.mx} 
-                icon={Mail} color="text-purple-500" 
+              <DNSSect title="MX Records"
+                recs={dnsData.generated.mx}
+                live={dnsData.live.mx}
+                icon={Mail} color="text-purple-500"
                 onCopy={copyToClipboard} copied={copied}
               />
-              <DNSSect title="TXT / SPF" 
-                recs={dnsData.generated.spf?.value ? [dnsData.generated.spf] : []} 
-                live={dnsData.live.spf?.value ? [dnsData.live.spf] : []} 
-                icon={ShieldCheck} color="text-green-500" 
+              <DNSSect title="TXT / SPF"
+                recs={dnsData.generated.spf?.value ? [dnsData.generated.spf] : []}
+                live={dnsData.live.spf?.value ? [dnsData.live.spf] : []}
+                icon={ShieldCheck} color="text-green-500"
                 onCopy={copyToClipboard} copied={copied}
               />
-              <DNSSect title="DMARC" 
-                recs={dnsData.generated.dmarc?.value ? [dnsData.generated.dmarc] : []} 
-                live={dnsData.live.dmarc?.value ? [dnsData.live.dmarc] : []} 
-                icon={ShieldCheck} color="text-orange-500" 
+              <DNSSect title="DMARC"
+                recs={dnsData.generated.dmarc?.value ? [dnsData.generated.dmarc] : []}
+                live={dnsData.live.dmarc?.value ? [dnsData.live.dmarc] : []}
+                icon={ShieldCheck} color="text-orange-500"
                 onCopy={copyToClipboard} copied={copied}
               />
-              <DNSSect title="DKIM" 
-                recs={dnsData.generated.dkim} 
-                live={dnsData.live.dkim} 
-                icon={FileKey} color="text-pink-500" 
+              <DNSSect title="DKIM"
+                recs={dnsData.generated.dkim}
+                live={dnsData.live.dkim}
+                icon={FileKey} color="text-pink-500"
                 onCopy={copyToClipboard} copied={copied}
                 isDKIM
               />
@@ -234,18 +234,18 @@ function DNSSect({ title, recs, live, icon: Icon, color, onCopy, copied, isDKIM 
       <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
         <Icon className={cn("w-3.5 h-3.5", color)} /> {title}
       </div>
-      
+
       {safeRecs.map((r, i) => {
         // Find matching live record from safeLive
-        const found = safeLive.find(l => 
-          isDKIM 
+        const found = safeLive.find(l =>
+          isDKIM
             ? l.selector === r.selector // Match selector for DKIM
             : l.name === r.name // Match name for others
         );
-        
+
         // Simple status check
         const isMatch = found && (
-          isDKIM 
+          isDKIM
             ? found.dns_value.includes("p=") // Rough check for DKIM key presence
             : found.value === r.value
         );
@@ -256,7 +256,7 @@ function DNSSect({ title, recs, live, icon: Icon, color, onCopy, copied, isDKIM 
               <span className="font-mono text-xs font-semibold">{r.name || r.dns_name}</span>
               <div className="flex gap-2">
                 {found ? (
-                  isMatch 
+                  isMatch
                     ? <span className="text-[10px] bg-green-500/10 text-green-600 px-1.5 rounded flex items-center gap-1"><Check className="w-3 h-3" /> Live</span>
                     : <span className="text-[10px] bg-amber-500/10 text-amber-600 px-1.5 rounded flex items-center gap-1">Mismatch</span>
                 ) : (
@@ -264,7 +264,7 @@ function DNSSect({ title, recs, live, icon: Icon, color, onCopy, copied, isDKIM 
                 )}
               </div>
             </div>
-            
+
             {/* Recommended */}
             <div className="p-2 flex gap-2 group">
               <div className="min-w-[60px] text-[10px] uppercase text-muted-foreground pt-0.5">Config</div>

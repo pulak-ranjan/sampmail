@@ -4,14 +4,14 @@ import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement,
   LineElement, BarElement, Title, Tooltip, Legend, Filler
 } from 'chart.js';
-import { 
-  BarChart3, 
-  Send, 
-  CheckCircle2, 
-  XCircle, 
-  Clock, 
-  RefreshCw, 
-  Filter 
+import {
+  BarChart3,
+  Send,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  RefreshCw,
+  Filter
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -25,13 +25,13 @@ export default function StatsPage() {
   const [selectedDomain, setSelectedDomain] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const token = localStorage.getItem('kumoui_token');
+  const token = localStorage.getItem('sampmail_token');
   const headers = { Authorization: `Bearer ${token}` };
 
-  useEffect(() => { 
+  useEffect(() => {
     fetchDomains();
-    fetchStats(); 
-    fetchSummary(); 
+    fetchStats();
+    fetchSummary();
   }, [days]);
 
   const fetchDomains = async () => {
@@ -65,18 +65,18 @@ export default function StatsPage() {
     fetchStats(); fetchSummary();
   };
 
-  const availableDomains = domainList.length > 0 
-    ? domainList.map(d => d.name) 
+  const availableDomains = domainList.length > 0
+    ? domainList.map(d => d.name)
     : Object.keys(stats);
 
   const getChartData = () => {
     if (selectedDomain && stats[selectedDomain]) return stats[selectedDomain];
-    
+
     if (selectedDomain && !stats[selectedDomain]) {
-       return Array.from({length: days}).map((_, i) => ({
-         date: new Date(Date.now() - (days - 1 - i) * 86400000).toISOString().split('T')[0],
-         sent: 0, delivered: 0, bounced: 0
-       }));
+      return Array.from({ length: days }).map((_, i) => ({
+        date: new Date(Date.now() - (days - 1 - i) * 86400000).toISOString().split('T')[0],
+        sent: 0, delivered: 0, bounced: 0
+      }));
     }
 
     const agg = {};
@@ -110,21 +110,21 @@ export default function StatsPage() {
   const barData = {
     labels: availableDomains.slice(0, 10),
     datasets: [
-      { 
-        label: 'Sent', 
-        data: availableDomains.slice(0, 10).map(d => (stats[d] || []).reduce((s, x) => s + (x.sent || 0), 0)), 
-        backgroundColor: '#3b82f6' 
+      {
+        label: 'Sent',
+        data: availableDomains.slice(0, 10).map(d => (stats[d] || []).reduce((s, x) => s + (x.sent || 0), 0)),
+        backgroundColor: '#3b82f6'
       },
-      { 
-        label: 'Bounced', 
-        data: availableDomains.slice(0, 10).map(d => (stats[d] || []).reduce((s, x) => s + (x.bounced || 0), 0)), 
-        backgroundColor: '#ef4444' 
+      {
+        label: 'Bounced',
+        data: availableDomains.slice(0, 10).map(d => (stats[d] || []).reduce((s, x) => s + (x.bounced || 0), 0)),
+        backgroundColor: '#ef4444'
       },
     ],
   };
 
   const opts = {
-    responsive: true, 
+    responsive: true,
     maintainAspectRatio: false,
     plugins: { legend: { position: 'top', labels: { color: textColor } } },
     scales: { x: { ticks: { color: textColor }, grid: { color: gridColor } }, y: { ticks: { color: textColor }, grid: { color: gridColor } } }
@@ -205,14 +205,14 @@ export default function StatsPage() {
                   <tr><td colSpan="5" className="p-6 text-center text-muted-foreground">No data available</td></tr>
                 ) : (
                   availableDomains.map(domain => {
-                    const s = (stats[domain] || []).reduce((a, d) => ({ 
-                      sent: a.sent + (d.sent || 0), 
-                      delivered: a.delivered + (d.delivered || 0), 
-                      bounced: a.bounced + (d.bounced || 0) 
+                    const s = (stats[domain] || []).reduce((a, d) => ({
+                      sent: a.sent + (d.sent || 0),
+                      delivered: a.delivered + (d.delivered || 0),
+                      bounced: a.bounced + (d.bounced || 0)
                     }), { sent: 0, delivered: 0, bounced: 0 });
-                    
+
                     const rate = s.sent > 0 ? (s.delivered / s.sent * 100).toFixed(1) : 0;
-                    
+
                     return (
                       <tr key={domain} className="hover:bg-muted/50 transition-colors">
                         <td className="px-6 py-4 font-medium">{domain}</td>
@@ -220,10 +220,10 @@ export default function StatsPage() {
                         <td className="px-6 py-4 text-right tabular-nums text-green-600 dark:text-green-400">{s.delivered.toLocaleString()}</td>
                         <td className="px-6 py-4 text-right tabular-nums text-red-600 dark:text-red-400">{s.bounced.toLocaleString()}</td>
                         <td className="px-6 py-4 text-right">
-                          <span className={cn("px-2 py-1 rounded-full text-xs font-medium", 
+                          <span className={cn("px-2 py-1 rounded-full text-xs font-medium",
                             rate > 95 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
-                            rate > 80 ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" :
-                            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                              rate > 80 ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" :
+                                "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
                           )}>
                             {rate}%
                           </span>

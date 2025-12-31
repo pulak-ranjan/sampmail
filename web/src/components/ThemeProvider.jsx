@@ -7,7 +7,7 @@ const ThemeContext = createContext({
   setTheme: () => null,
 });
 
-export function ThemeProvider({ children, defaultTheme = "system", storageKey = "kumoui-theme" }) {
+export function ThemeProvider({ children, defaultTheme = "system", storageKey = "sampmail-theme" }) {
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem(storageKey) || defaultTheme;
   });
@@ -87,7 +87,7 @@ export function ThemeToggle() {
 }
 
 export function ThemeToggleCompact() {
-    // Legacy support if needed, but standardizing on the one above is better.
-    // For now, redirecting to standard toggle.
-    return <ThemeToggle />;
+  // Legacy support if needed, but standardizing on the one above is better.
+  // For now, redirecting to standard toggle.
+  return <ThemeToggle />;
 }

@@ -4,7 +4,7 @@ import { login as apiLogin, me as apiMe, registerAdmin } from "./api";
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(localStorage.getItem("kumoui_token") || "");
+  const [token, setToken] = useState(localStorage.getItem("sampmail_token") || "");
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(!!token);
 
@@ -19,7 +19,7 @@ export function AuthProvider({ children }) {
         const u = await apiMe();
         setUser(u);
       } catch {
-        localStorage.removeItem("kumoui_token");
+        localStorage.removeItem("sampmail_token");
         setToken("");
         setUser(null);
       } finally {
@@ -30,14 +30,14 @@ export function AuthProvider({ children }) {
 
   const handleLogin = async (email, password) => {
     const res = await apiLogin(email, password);
-    
+
     // FIX: Check if 2FA is required before setting token
     if (res.requires_2fa) {
-        return res; // Return early, let component handle 2FA step
+      return res; // Return early, let component handle 2FA step
     }
 
     // Normal login success
-    localStorage.setItem("kumoui_token", res.token);
+    localStorage.setItem("sampmail_token", res.token);
     setToken(res.token);
     setUser({ email: res.email });
     return res;
@@ -46,20 +46,20 @@ export function AuthProvider({ children }) {
   // FIX: New helper for 2FA verification step
   const verify2FA = async (tempToken, code) => {
     const res = await fetch('/api/auth/verify-2fa', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Temp-Token': tempToken
-        },
-        body: JSON.stringify({ code })
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Temp-Token': tempToken
+      },
+      body: JSON.stringify({ code })
     });
-    
+
     const data = await res.json();
     if (!res.ok) {
-        throw new Error(data.error || 'Verification failed');
+      throw new Error(data.error || 'Verification failed');
     }
 
-    localStorage.setItem("kumoui_token", data.token);
+    localStorage.setItem("sampmail_token", data.token);
     setToken(data.token);
     setUser({ email: data.email });
     return data;
@@ -67,27 +67,27 @@ export function AuthProvider({ children }) {
 
   const handleRegister = async (email, password) => {
     const res = await registerAdmin(email, password);
-    localStorage.setItem("kumoui_token", res.token);
+    localStorage.setItem("sampmail_token", res.token);
     setToken(res.token);
     setUser({ email: res.email });
   };
 
   const logout = () => {
-    localStorage.removeItem("kumoui_token");
+    localStorage.removeItem("sampmail_token");
     setToken("");
     setUser(null);
   };
 
   return (
     <AuthContext.Provider
-      value={{ 
-        token, 
-        user, 
-        loading, 
-        login: handleLogin, 
+      value={{
+        token,
+        user,
+        loading,
+        login: handleLogin,
         verify2FA, // Export new function
-        register: handleRegister, 
-        logout 
+        register: handleRegister,
+        logout
       }}
     >
       {children}

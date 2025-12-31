@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  RefreshCw, 
-  Trash2, 
-  Zap, 
-  Inbox, 
-  Clock, 
+import {
+  RefreshCw,
+  Trash2,
+  Zap,
+  Inbox,
+  Clock,
   AlertCircle,
   CheckCircle2,
   Mail
@@ -17,7 +17,7 @@ export default function QueuePage() {
   const [loading, setLoading] = useState(true);
   const [limit, setLimit] = useState(100);
 
-  const token = localStorage.getItem('kumoui_token');
+  const token = localStorage.getItem('sampmail_token');
   const headers = { Authorization: `Bearer ${token}` };
 
   useEffect(() => { fetchQueue(); fetchStats(); }, [limit]);
@@ -57,7 +57,7 @@ export default function QueuePage() {
   };
 
   const formatDate = (d) => d ? new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
-  const formatSize = (b) => b > 1024 ? `${(b/1024).toFixed(1)} KB` : `${b} B`;
+  const formatSize = (b) => b > 1024 ? `${(b / 1024).toFixed(1)} KB` : `${b} B`;
 
   return (
     <div className="space-y-6">
@@ -126,8 +126,8 @@ export default function QueuePage() {
                     <td className="px-4 py-3">
                       <span className={cn(
                         "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize",
-                        msg.status === 'deferred' 
-                          ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400" 
+                        msg.status === 'deferred'
+                          ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
                           : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
                       )}>
                         {msg.status || 'queued'}
@@ -136,8 +136,8 @@ export default function QueuePage() {
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{formatDate(msg.created_at)}</td>
                     <td className="px-4 py-3 text-center">{msg.attempts || 0}</td>
                     <td className="px-4 py-3 text-right">
-                      <button 
-                        onClick={() => deleteMessage(msg.id)} 
+                      <button
+                        onClick={() => deleteMessage(msg.id)}
                         className="p-1.5 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-md transition-colors opacity-0 group-hover:opacity-100"
                         title="Delete Message"
                       >

@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from "react";
-import { 
-  Plus, 
-  Upload, 
-  Trash2, 
-  Edit2, 
-  Copy, 
-  Check, 
-  Server, 
-  Globe, 
-  Mail, 
-  ShieldCheck, 
+import {
+  Plus,
+  Upload,
+  Trash2,
+  Edit2,
+  Copy,
+  Check,
+  Server,
+  Globe,
+  Mail,
+  ShieldCheck,
   AlertCircle,
   MoreHorizontal,
   Info,
@@ -36,12 +36,12 @@ export default function Domains() {
   const [systemIPs, setSystemIPs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
-  
+
   // Modals State
   const [editingDomain, setEditingDomain] = useState(null);
   const [showImport, setShowImport] = useState(false);
   const [showInfo, setShowInfo] = useState(false); // New SMTP Info Modal
-  
+
   const [senderForm, setSenderForm] = useState({
     domainID: null,
     id: 0,
@@ -50,7 +50,7 @@ export default function Domains() {
     ip: "",
     smtp_password: ""
   });
-  
+
   // NEW: Toggle for password visibility
   const [showPassword, setShowPassword] = useState(false);
 
@@ -133,11 +133,11 @@ export default function Domains() {
     const ips = new Set();
     d.senders?.forEach(s => s.ip && ips.add(s.ip));
     ips.add(mainIp);
-    
+
     const ipParts = Array.from(ips).map(ip => `ip4:${ip}`).join(" ");
     const spfValue = `v=spf1 ${ipParts} ~all`;
     const root = d.name;
-    
+
     return [
       { label: "A (Mail)", value: `${d.mail_host} 3600 IN A ${mainIp}` },
       { label: "A (Bounce)", value: `${d.bounce_host} 3600 IN A ${mainIp}` },
@@ -154,7 +154,7 @@ export default function Domains() {
           <p className="text-muted-foreground">Manage your sending domains and identities.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button 
+          <button
             onClick={() => setShowInfo(true)}
             className="flex items-center gap-2 h-10 px-4 rounded-md border bg-background hover:bg-muted text-sm font-medium transition-colors"
           >
@@ -227,17 +227,17 @@ export default function Domains() {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Senders</h4>
-                    <button 
+                    <button
                       onClick={() => {
                         setSenderForm({ domainID: d.id, id: 0, local_part: "", email: "", ip: "", smtp_password: "" });
                         setShowPassword(false);
-                      }} 
+                      }}
                       className="text-xs flex items-center gap-1 text-primary hover:underline"
                     >
                       <Plus className="w-3 h-3" /> Add Sender
                     </button>
                   </div>
-                  
+
                   {d.senders?.length === 0 ? (
                     <div className="text-sm text-muted-foreground italic">No senders configured.</div>
                   ) : (
@@ -255,11 +255,11 @@ export default function Domains() {
                             </div>
                           </div>
                           <div className="flex gap-1">
-                            <button 
+                            <button
                               onClick={() => {
                                 setSenderForm({ domainID: d.id, ...s });
                                 setShowPassword(false);
-                              }} 
+                              }}
                               className="p-1.5 hover:bg-muted rounded text-muted-foreground"
                             >
                               <Edit2 className="w-3 h-3" />
@@ -287,10 +287,10 @@ export default function Domains() {
               </h3>
               <button onClick={() => setShowInfo(false)}><X className="w-4 h-4" /></button>
             </div>
-            
+
             <div className="space-y-4 text-sm">
-              <p className="text-muted-foreground">Use these settings to connect your email marketing software (e.g. MailWizz, Interspire) to this KumoMTA server.</p>
-              
+              <p className="text-muted-foreground">Use these settings to connect your email marketing software (e.g. MailWizz, Interspire) to this SampMail MTA server.</p>
+
               <div className="grid gap-3">
                 <div className="bg-muted/30 p-3 rounded-md border flex justify-between items-center">
                   <span className="font-medium">Hostname</span>
@@ -340,16 +340,16 @@ export default function Domains() {
             <form onSubmit={handleSaveDomain} className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Domain Name</label>
-                <input className="w-full h-10 px-3 rounded-md border bg-background" value={editingDomain.name} onChange={e => setEditingDomain({...editingDomain, name: e.target.value})} required />
+                <input className="w-full h-10 px-3 rounded-md border bg-background" value={editingDomain.name} onChange={e => setEditingDomain({ ...editingDomain, name: e.target.value })} required />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Mail Host</label>
-                  <input className="w-full h-10 px-3 rounded-md border bg-background" value={editingDomain.mail_host} onChange={e => setEditingDomain({...editingDomain, mail_host: e.target.value})} />
+                  <input className="w-full h-10 px-3 rounded-md border bg-background" value={editingDomain.mail_host} onChange={e => setEditingDomain({ ...editingDomain, mail_host: e.target.value })} />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Bounce Host</label>
-                  <input className="w-full h-10 px-3 rounded-md border bg-background" value={editingDomain.bounce_host} onChange={e => setEditingDomain({...editingDomain, bounce_host: e.target.value})} />
+                  <input className="w-full h-10 px-3 rounded-md border bg-background" value={editingDomain.bounce_host} onChange={e => setEditingDomain({ ...editingDomain, bounce_host: e.target.value })} />
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-2">
@@ -369,30 +369,30 @@ export default function Domains() {
             <form onSubmit={handleSaveSender} className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Local Part</label>
-                <input className="w-full h-10 px-3 rounded-md border bg-background" value={senderForm.local_part} onChange={e => setSenderForm({...senderForm, local_part: e.target.value})} placeholder="e.g. news" />
+                <input className="w-full h-10 px-3 rounded-md border bg-background" value={senderForm.local_part} onChange={e => setSenderForm({ ...senderForm, local_part: e.target.value })} placeholder="e.g. news" />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Email Address</label>
-                <input className="w-full h-10 px-3 rounded-md border bg-background" value={senderForm.email} onChange={e => setSenderForm({...senderForm, email: e.target.value})} placeholder="news@example.com" />
+                <input className="w-full h-10 px-3 rounded-md border bg-background" value={senderForm.email} onChange={e => setSenderForm({ ...senderForm, email: e.target.value })} placeholder="news@example.com" />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">IP Address</label>
-                <select className="w-full h-10 px-3 rounded-md border bg-background" value={senderForm.ip} onChange={e => setSenderForm({...senderForm, ip: e.target.value})}>
+                <select className="w-full h-10 px-3 rounded-md border bg-background" value={senderForm.ip} onChange={e => setSenderForm({ ...senderForm, ip: e.target.value })}>
                   <option value="">-- Default Server IP --</option>
                   {systemIPs.map(ip => <option key={ip.id} value={ip.value}>{ip.value} ({ip.interface})</option>)}
                 </select>
               </div>
-              
+
               {/* UPDATED: Password Field with Eye Toggle */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">SMTP Password</label>
                 <div className="relative">
-                  <input 
-                    type={showPassword ? "text" : "password"} 
-                    className="w-full h-10 px-3 pr-10 rounded-md border bg-background text-sm" 
-                    value={senderForm.smtp_password} 
-                    onChange={e => setSenderForm({...senderForm, smtp_password: e.target.value})} 
-                    placeholder="Leave blank to keep current" 
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    className="w-full h-10 px-3 pr-10 rounded-md border bg-background text-sm"
+                    value={senderForm.smtp_password}
+                    onChange={e => setSenderForm({ ...senderForm, smtp_password: e.target.value })}
+                    placeholder="Leave blank to keep current"
                   />
                   <button
                     type="button"
@@ -406,12 +406,12 @@ export default function Domains() {
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => {
                     setSenderForm({ domainID: null, id: 0, local_part: "", email: "", ip: "", smtp_password: "" });
                     setShowPassword(false);
-                  }} 
+                  }}
                   className="px-4 py-2 text-sm rounded-md hover:bg-muted"
                 >
                   Cancel
@@ -430,11 +430,11 @@ export default function Domains() {
             <h3 className="text-lg font-semibold">Bulk Import</h3>
             <p className="text-sm text-muted-foreground">Upload a CSV with headers: <code>domain, localpart, ip, password, bounce, bounce_password</code></p>
             <form onSubmit={handleImport} className="space-y-4">
-                <input type="file" name="file" accept=".csv" className="w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90" required />
-                <div className="flex justify-end gap-2">
-                    <button type="button" onClick={() => setShowImport(false)} className="px-4 py-2 text-sm rounded-md hover:bg-muted">Cancel</button>
-                    <button type="submit" className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90">Import</button>
-                </div>
+              <input type="file" name="file" accept=".csv" className="w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90" required />
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setShowImport(false)} className="px-4 py-2 text-sm rounded-md hover:bg-muted">Cancel</button>
+                <button type="submit" className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90">Import</button>
+              </div>
             </form>
           </div>
         </div>

@@ -2,33 +2,102 @@ package api
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/pulak-ranjan/sampmail/internal/models"
 )
 
-// GET /api/keys
-// List all active API keys
+// hashAPIKey returns SHA256 hash of the API key
+func hashAPIKey(key string) string {
+	hash := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(hash[:])
+}
+
+// ValidAPIKeyScopes contains allowed API key scopes
+var ValidAPIKeyScopes = map[string]bool{
+	"relay":     true,
+	"verify":    true,
+	"campaigns": true,
+	"lists":     true,
+	"analytics": true,
+	"admin":     true,
+}
+
+// validateScopes returns true if all scopes in the string are valid
+func validateScopes(scopes string) bool {
+	if scopes == "" {
+		return true
+	}
+	for _, scope := range strings.Split(scopes, ",") {
+		scope = strings.TrimSpace(scope)
+		if scope != "" && !ValidAPIKeyScopes[scope] {
+			return false
+		}
+	}
+	return true
+}
+
+// HasScope returns true if the API key has the required scope
+func HasScope(apiKey *models.APIKey, requiredScope string) bool {
+	if apiKey == nil || apiKey.Scopes == "" {
+		return false
+	}
+	if strings.Contains(apiKey.Scopes, "admin") {
+		return true
+	}
+	for _, scope := range strings.Split(apiKey.Scopes, ",") {
+		if strings.TrimSpace(scope) == requiredScope {
+			return true
+		}
+	}
+	return false
+}
+
+// handleListKeys returns all API keys with masked values
 func (s *Server) handleListKeys(w http.ResponseWriter, r *http.Request) {
 	var keys []models.APIKey
 	if err := s.Store.DB.Find(&keys).Error; err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
 		return
 	}
-	writeJSON(w, http.StatusOK, keys)
+
+	type maskedKey struct {
+		ID        uint      `json:"id"`
+		Name      string    `json:"name"`
+		KeyPrefix string    `json:"key_prefix"`
+		Scopes    string    `json:"scopes"`
+		CreatedAt time.Time `json:"created_at"`
+	}
+
+	masked := make([]maskedKey, len(keys))
+	for i, k := range keys {
+		prefix := k.Key
+		if len(prefix) > 12 {
+			prefix = prefix[:12] + "..."
+		}
+		masked[i] = maskedKey{
+			ID:        k.ID,
+			Name:      k.Name,
+			KeyPrefix: prefix,
+			Scopes:    k.Scopes,
+			CreatedAt: k.CreatedAt,
+		}
+	}
+	writeJSON(w, http.StatusOK, masked)
 }
 
-// POST /api/keys
-// Create a new API Key
+// handleCreateKey creates a new API key
 func (s *Server) handleCreateKey(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name   string `json:"name"`
-		Scopes string `json:"scopes"` // e.g. "relay,verify"
+		Scopes string `json:"scopes"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -40,17 +109,29 @@ func (s *Server) handleCreateKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate a secure random key
-	bytes := make([]byte, 24)
-	if _, err := rand.Read(bytes); err != nil {
+	if !validateScopes(req.Scopes) {
+		validScopes := make([]string, 0, len(ValidAPIKeyScopes))
+		for scope := range ValidAPIKeyScopes {
+			validScopes = append(validScopes, scope)
+		}
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error":        "invalid scopes",
+			"valid_scopes": strings.Join(validScopes, ","),
+		})
+		return
+	}
+
+	keyBytes := make([]byte, 32)
+	if _, err := rand.Read(keyBytes); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "crypto error"})
 		return
 	}
-	keyStr := "kumo_" + hex.EncodeToString(bytes)
+	keyStr := "kumo_" + hex.EncodeToString(keyBytes)
+	keyHash := hashAPIKey(keyStr)
 
 	apiKey := &models.APIKey{
 		Name:      req.Name,
-		Key:       keyStr,
+		Key:       keyHash,
 		Scopes:    req.Scopes,
 		CreatedAt: time.Now(),
 	}
@@ -60,11 +141,17 @@ func (s *Server) handleCreateKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, apiKey)
+	writeJSON(w, http.StatusCreated, map[string]interface{}{
+		"id":         apiKey.ID,
+		"name":       apiKey.Name,
+		"key":        keyStr,
+		"scopes":     apiKey.Scopes,
+		"created_at": apiKey.CreatedAt,
+		"warning":    "Save this key now. It will not be shown again.",
+	})
 }
 
-// DELETE /api/keys/{id}
-// Revoke an API Key
+// handleDeleteKey deletes an API key by ID
 func (s *Server) handleDeleteKey(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, _ := strconv.Atoi(idStr)

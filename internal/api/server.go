@@ -25,6 +25,7 @@ type Server struct {
 }
 
 const adminContextKey contextKey = "admin"
+
 type contextKey string
 
 func NewServer(st *store.Store, ws *core.WebhookService) *Server {
@@ -39,13 +40,13 @@ func (s *Server) routes() chi.Router {
 	cfg := config.Get()
 
 	// Core middleware - order matters!
-	r.Use(custom.RequestIDMiddleware)                          // Add request ID first
-	r.Use(custom.SecurityHeadersMiddleware)                    // Security headers
-	r.Use(middleware.RealIP)                                   // Extract real IP
-	r.Use(middleware.Logger)                                   // Request logging
-	r.Use(middleware.Recoverer)                                // Panic recovery
-	r.Use(custom.TimeoutMiddleware(cfg.RequestTimeout))        // Request timeout
-	r.Use(custom.MaxBodySizeMiddleware(cfg.MaxRequestBody))    // Limit body size
+	r.Use(custom.RequestIDMiddleware)                       // Add request ID first
+	r.Use(custom.SecurityHeadersMiddleware)                 // Security headers
+	r.Use(middleware.RealIP)                                // Extract real IP
+	r.Use(middleware.Logger)                                // Request logging
+	r.Use(middleware.Recoverer)                             // Panic recovery
+	r.Use(custom.TimeoutMiddleware(cfg.RequestTimeout))     // Request timeout
+	r.Use(custom.MaxBodySizeMiddleware(cfg.MaxRequestBody)) // Limit body size
 
 	// Metrics middleware (if enabled)
 	if cfg.MetricsEnabled {
@@ -205,6 +206,12 @@ func (s *Server) routes() chi.Router {
 		r.Get("/api/system/services", s.handleSystemServices)
 		r.Get("/api/system/ports", s.handleSystemPorts)
 
+		// SSL/HTTPS Management
+		sslHandler := NewSSLHandler()
+		r.Get("/api/system/ssl", sslHandler.HandleGetSSLStatus)
+		r.Post("/api/system/ssl/install", sslHandler.HandleInstallSSL)
+		r.Post("/api/system/ssl/renew", sslHandler.HandleRenewSSL)
+
 		// Version & Updates
 		r.Get("/api/version", s.handleGetVersion)
 		r.Get("/api/updates/status", s.handleUpdateStatus)
@@ -214,9 +221,9 @@ func (s *Server) routes() chi.Router {
 		r.Post("/api/updates/rollback", s.handleRollback)
 		r.Get("/api/updates/changelog", s.handleUpdateChangelog)
 
-		// Bulk Import
-		r.Post("/api/import/csv", s.handleCSVImport)          // Sync (limited to 1MB)
-		r.Post("/api/import/csv/async", s.handleCSVImportAsync) // Async (up to 50MB)
+		// Bulk Import (rate limited to prevent abuse)
+		r.With(custom.ImportLimiter.Limit).Post("/api/import/csv", s.handleCSVImport)            // Sync (limited to 1MB)
+		r.With(custom.ImportLimiter.Limit).Post("/api/import/csv/async", s.handleCSVImportAsync) // Async (up to 50MB)
 		r.Get("/api/import/status/{jobId}", s.handleImportStatus)
 
 		// Proxy Management
@@ -245,15 +252,15 @@ func (s *Server) routes() chi.Router {
 		// Since this group is protected, we must move tracking OUTSIDE or use skip logic.
 	})
 
-	// --- Tracking Routes (Unprotected) ---
+	// --- Tracking Routes (Unprotected but rate limited) ---
 	tracking := NewTrackingHandler(s.Store)
-	r.Get("/api/track/open/{id}", tracking.HandleTrackOpen)
-	r.Get("/api/track/click/{id}", tracking.HandleTrackClick)
+	r.With(custom.TrackingLimiter.Limit).Get("/api/track/open/{id}", tracking.HandleTrackOpen)
+	r.With(custom.TrackingLimiter.Limit).Get("/api/track/click/{id}", tracking.HandleTrackClick)
 
 	// --- Unsubscribe Routes (Unprotected - users click these from emails) ---
 	unsub := NewUnsubscribeHandler(s.Store)
-	r.Get("/api/unsubscribe/{token}", unsub.HandleUnsubscribePage)
-	r.Post("/api/unsubscribe/{token}", unsub.HandleUnsubscribeConfirm)
+	r.With(custom.TrackingLimiter.Limit).Get("/api/unsubscribe/{token}", unsub.HandleUnsubscribePage)
+	r.With(custom.TrackingLimiter.Limit).Post("/api/unsubscribe/{token}", unsub.HandleUnsubscribeConfirm)
 
 	// --- Analytics (Protected) ---
 	r.Group(func(r chi.Router) {
@@ -315,7 +322,7 @@ func (s *Server) routes() chi.Router {
 		// =====================================
 		// API V2 - Templates, Automations, Campaigns
 		// =====================================
-		
+
 		// Templates V2 - Drag & Drop Builder
 		templateV2 := NewTemplateHandlerV2(s.Store)
 		r.Get("/api/v2/templates", templateV2.ListTemplates)
@@ -415,7 +422,9 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 }
 
 func getAdminFromContext(ctx context.Context) *models.AdminUser {
-	if u, ok := ctx.Value(adminContextKey).(*models.AdminUser); ok { return u }
+	if u, ok := ctx.Value(adminContextKey).(*models.AdminUser); ok {
+		return u
+	}
 	return nil
 }
 

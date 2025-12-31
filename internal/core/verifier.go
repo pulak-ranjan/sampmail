@@ -93,10 +93,10 @@ var hardToVerifyDomains = map[string]bool{
 
 // VerifierOptions configures the check
 type VerifierOptions struct {
-	SenderEmail    string
-	HeloHost       string
-	SourceIPs      []string // List of local IPs to rotate
-	ProxyURL       string   // Fallback proxy (SOCKS5/HTTP)
+	SenderEmail string
+	HeloHost    string
+	SourceIPs   []string // List of local IPs to rotate
+	ProxyURLs   []string // List of proxies to rotate
 
 	// Reacher Configuration (choose one method)
 	ReacherURL     string // HTTP API URL (e.g., "http://localhost:8080")
@@ -429,10 +429,12 @@ func verifyWithLocalSMTP(email string, opts VerifierOptions, res EmailVerificati
 		})
 	}
 
-	// C. Add Proxy (Fallback)
-	if opts.ProxyURL != "" {
+	// C. Add Proxies (Rotation)
+	// Iterate through all provided proxy URLs
+	for _, pURL := range opts.ProxyURLs { // Changed from ProxyURL to ProxyURLs
+		proxyURL := pURL // capture closure
 		dialers = append(dialers, func(network, addr string) (net.Conn, error) {
-			u, err := url.Parse(opts.ProxyURL)
+			u, err := url.Parse(proxyURL)
 			if err != nil {
 				return nil, err
 			}

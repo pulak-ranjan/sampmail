@@ -342,8 +342,87 @@ func sanitizeDomain(domain string) string {
 }
 
 func (s *Server) sendToAI(provider, key string, messages []ChatMessage) (string, error) {
+	// --- Google Gemini Handler ---
+	if provider == "gemini" {
+		url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + key
+
+		type Part struct {
+			Text string `json:"text"`
+		}
+		type Content struct {
+			Role  string `json:"role"`
+			Parts []Part `json:"parts"`
+		}
+		type SystemInstruction struct {
+			Parts []Part `json:"parts"`
+		}
+		type GeminiRequest struct {
+			Contents          []Content          `json:"contents"`
+			SystemInstruction *SystemInstruction `json:"systemInstruction,omitempty"`
+		}
+
+		var geminiReq GeminiRequest
+		var contents []Content
+
+		for _, m := range messages {
+			if m.Role == "system" {
+				geminiReq.SystemInstruction = &SystemInstruction{
+					Parts: []Part{{Text: m.Content}},
+				}
+				continue
+			}
+			role := "user"
+			if m.Role == "assistant" {
+				role = "model"
+			}
+			contents = append(contents, Content{
+				Role:  role,
+				Parts: []Part{{Text: m.Content}},
+			})
+		}
+		geminiReq.Contents = contents
+
+		reqBody, _ := json.Marshal(geminiReq)
+		req, _ := http.NewRequest("POST", url, bytes.NewBuffer(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{Timeout: 60 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			return "", err
+		}
+		defer resp.Body.Close()
+
+		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != 200 {
+			return "", fmt.Errorf("Gemini API Error (%d): %s", resp.StatusCode, string(body))
+		}
+
+		// Parse Gemini Response
+		// Structure: { candidates: [ { content: { parts: [ { text: "..." } ] } } ] }
+		var result struct {
+			Candidates []struct {
+				Content struct {
+					Parts []struct {
+						Text string `json:"text"`
+					} `json:"parts"`
+				} `json:"content"`
+			} `json:"candidates"`
+		}
+
+		if err := json.Unmarshal(body, &result); err != nil {
+			return "", err
+		}
+		if len(result.Candidates) > 0 && len(result.Candidates[0].Content.Parts) > 0 {
+			return result.Candidates[0].Content.Parts[0].Text, nil
+		}
+		return "No response from Gemini.", nil
+	}
+
+	// --- OpenAI / DeepSeek Handler (Standard) ---
 	url := "https://api.openai.com/v1/chat/completions"
-	model := "gpt-3.5-turbo"
+	model := "gpt-4o"
+
 	if provider == "deepseek" {
 		url = "https://api.deepseek.com/chat/completions"
 		model = "deepseek-chat"

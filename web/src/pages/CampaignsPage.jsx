@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import EmailTemplateBuilder from '../components/EmailTemplateBuilder';
+import { Mail, Rocket, Sparkles, Lightbulb, ArrowLeft, Plus } from 'lucide-react';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 const CampaignsPage = () => {
     const [campaigns, setCampaigns] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [showCreate, setShowCreate] = useState(false);
+    const [view, setView] = useState('list'); // list, create, edit
+    const [selectedCampaign, setSelectedCampaign] = useState(null);
+    const [deleteId, setDeleteId] = useState(null);
 
     useEffect(() => {
         fetchCampaigns();
@@ -35,6 +40,47 @@ const CampaignsPage = () => {
         return colors[status] || colors.draft;
     };
 
+    const handleCreate = () => {
+        setSelectedCampaign(null);
+        setView('create');
+    };
+
+    const handleEdit = (campaign) => {
+        setSelectedCampaign(campaign);
+        setView('create'); // Re-use create view for editing
+    };
+
+    const handleDeleteClick = (id) => {
+        setDeleteId(id);
+    };
+
+    const confirmDelete = async () => {
+        if (!deleteId) return;
+        try {
+            await fetch(`/api/v2/campaigns/${deleteId}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+            });
+            fetchCampaigns();
+        } catch (error) {
+            console.error(error);
+        }
+        setDeleteId(null);
+    };
+
+    if (view === 'create') {
+        return (
+            <CampaignWizard
+                campaign={selectedCampaign}
+                onCancel={() => setView('list')}
+                onSave={() => {
+                    setView('list');
+                    fetchCampaigns();
+                }}
+            />
+        );
+    }
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64">
@@ -51,57 +97,73 @@ const CampaignsPage = () => {
                     <p className="text-gray-500">Create and manage email campaigns</p>
                 </div>
                 <button
-                    onClick={() => setShowCreate(true)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    onClick={handleCreate}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-sm transition-all flex items-center gap-2"
                 >
-                    + New Campaign
+                    <Plus className="w-4 h-4" /> New Campaign
                 </button>
             </div>
 
             {campaigns.length === 0 ? (
-                <div className="bg-white dark:bg-gray-800 rounded-xl p-12 text-center">
-                    <div className="text-6xl mb-4">📧</div>
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-12 text-center border dashed border-gray-300 dark:border-gray-700">
+                    <div className="flex justify-center mb-4">
+                        <Mail className="w-16 h-16 text-gray-300" />
+                    </div>
                     <h3 className="text-xl font-semibold mb-2 dark:text-white">No campaigns yet</h3>
                     <p className="text-gray-500 mb-4">Create your first email campaign to get started</p>
                     <button
-                        onClick={() => setShowCreate(true)}
-                        className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        onClick={handleCreate}
+                        className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium inline-flex items-center gap-2"
                     >
-                        Create Campaign
+                        <Plus className="w-4 h-4" /> Create Campaign
                     </button>
                 </div>
             ) : (
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
                     <table className="w-full">
-                        <thead className="bg-gray-50 dark:bg-gray-700">
+                        <thead className="bg-gray-50 dark:bg-gray-700 border-b dark:border-gray-600">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Name</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Subject</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Status</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Sent</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Opens</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Clicks</th>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Actions</th>
+                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Name</th>
+                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Subject</th>
+                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Stats</th>
+                                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700 text-sm">
                             {campaigns.map((campaign) => (
-                                <tr key={campaign.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <tr key={campaign.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className="font-medium text-gray-900 dark:text-white">{campaign.name}</span>
+                                        <div className="text-xs text-gray-500">Created {new Date(campaign.created_at).toLocaleDateString()}</div>
                                     </td>
-                                    <td className="px-6 py-4 text-gray-500 dark:text-gray-300">{campaign.subject}</td>
+                                    <td className="px-6 py-4 text-gray-500 dark:text-gray-300 max-w-[200px] truncate" title={campaign.subject}>
+                                        {campaign.subject}
+                                    </td>
                                     <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 text-xs rounded ${getStatusColor(campaign.status)}`}>
+                                        <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${getStatusColor(campaign.status)}`}>
                                             {campaign.status}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-gray-500 dark:text-gray-300">{campaign.sent_count || 0}</td>
-                                    <td className="px-6 py-4 text-gray-500 dark:text-gray-300">{campaign.opened_count || 0}</td>
-                                    <td className="px-6 py-4 text-gray-500 dark:text-gray-300">{campaign.clicked_count || 0}</td>
-                                    <td className="px-6 py-4 text-right">
-                                        <button className="text-blue-600 hover:underline mr-3">Edit</button>
-                                        <button className="text-red-600 hover:underline">Delete</button>
+                                    <td className="px-6 py-4">
+                                        <div className="flex gap-4 text-xs">
+                                            <div>
+                                                <span className="block text-gray-500">Sent</span>
+                                                <span className="font-semibold dark:text-gray-200">{campaign.sent_count || 0}</span>
+                                            </div>
+                                            <div>
+                                                <span className="block text-gray-500">Opens</span>
+                                                <span className="font-semibold text-green-600">{campaign.opened_count || 0}</span>
+                                            </div>
+                                            <div>
+                                                <span className="block text-gray-500">Clicks</span>
+                                                <span className="font-semibold text-blue-600">{campaign.clicked_count || 0}</span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 text-right space-x-3">
+                                        <button onClick={() => handleEdit(campaign)} className="text-blue-600 hover:text-blue-800 font-medium">Edit</button>
+                                        <button onClick={() => handleDeleteClick(campaign.id)} className="text-red-600 hover:text-red-800 font-medium">Delete</button>
                                     </td>
                                 </tr>
                             ))}
@@ -110,110 +172,226 @@ const CampaignsPage = () => {
                 </div>
             )}
 
-            {showCreate && (
-                <CreateCampaignModal
-                    onClose={() => setShowCreate(false)}
-                    onCreated={() => {
-                        setShowCreate(false);
-                        fetchCampaigns();
-                    }}
-                />
-            )}
+            <ConfirmationModal
+                isOpen={!!deleteId}
+                onClose={() => setDeleteId(null)}
+                onConfirm={confirmDelete}
+                title="Delete Campaign"
+                message="Are you sure you want to delete this campaign? This action cannot be undone."
+                confirmText="Delete"
+                type="danger"
+            />
         </div>
     );
 };
 
-const CreateCampaignModal = ({ onClose, onCreated }) => {
-    const [form, setForm] = useState({
+const CampaignWizard = ({ campaign, onCancel, onSave }) => {
+    const [step, setStep] = useState(1);
+    const [form, setForm] = useState(campaign || {
         name: '',
         subject: '',
         from_name: '',
         from_email: '',
+        html_content: '',
+        builder_json: null
     });
     const [saving, setSaving] = useState(false);
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    const handleSubmit = async () => {
         setSaving(true);
         try {
-            await fetch('/api/v2/campaigns', {
-                method: 'POST',
+            const url = campaign ? `/api/v2/campaigns/${campaign.id}` : '/api/v2/campaigns';
+            const method = campaign ? 'PUT' : 'POST';
+
+            await fetch(url, {
+                method,
                 headers: {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${localStorage.getItem('token')}`,
                 },
                 body: JSON.stringify(form),
             });
-            onCreated();
+            onSave();
         } catch (error) {
-            console.error('Failed to create campaign:', error);
+            console.error('Failed to save campaign:', error);
         } finally {
             setSaving(false);
         }
     };
 
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md">
-                <h2 className="text-xl font-bold mb-4 dark:text-white">Create Campaign</h2>
-                <form onSubmit={handleSubmit}>
-                    <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Campaign Name</label>
-                        <input
-                            type="text"
-                            value={form.name}
-                            onChange={(e) => setForm({ ...form, name: e.target.value })}
-                            className="w-full border dark:border-gray-600 rounded-lg p-2 dark:bg-gray-700 dark:text-white"
-                            placeholder="e.g., December Newsletter"
-                            required
-                        />
+        <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+            {/* Wizard Header */}
+            <div className="bg-white dark:bg-gray-800 border-b px-6 py-4 flex items-center justify-between shadow-sm z-10">
+                <div className="flex items-center gap-4">
+                    <button onClick={onCancel} className="flex items-center gap-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                        <ArrowLeft className="w-4 h-4" /> Back
+                    </button>
+                    <h2 className="text-lg font-bold dark:text-white">
+                        {campaign ? 'Edit Campaign' : 'New Campaign'}
+                    </h2>
+                    <div className="h-6 w-px bg-gray-200 dark:bg-gray-700"></div>
+                    <div className="flex gap-2">
+                        {[1, 2, 3].map(s => (
+                            <div key={s} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${step === s
+                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                : 'text-gray-500'
+                                }`}>
+                                Step {s}
+                            </div>
+                        ))}
                     </div>
-                    <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subject Line</label>
-                        <input
-                            type="text"
-                            value={form.subject}
-                            onChange={(e) => setForm({ ...form, subject: e.target.value })}
-                            className="w-full border dark:border-gray-600 rounded-lg p-2 dark:bg-gray-700 dark:text-white"
-                            placeholder="e.g., Your December update is here!"
-                            required
-                        />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 mb-6">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">From Name</label>
-                            <input
-                                type="text"
-                                value={form.from_name}
-                                onChange={(e) => setForm({ ...form, from_name: e.target.value })}
-                                className="w-full border dark:border-gray-600 rounded-lg p-2 dark:bg-gray-700 dark:text-white"
-                                placeholder="Your Name"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">From Email</label>
-                            <input
-                                type="email"
-                                value={form.from_email}
-                                onChange={(e) => setForm({ ...form, from_email: e.target.value })}
-                                className="w-full border dark:border-gray-600 rounded-lg p-2 dark:bg-gray-700 dark:text-white"
-                                placeholder="you@domain.com"
-                            />
-                        </div>
-                    </div>
-                    <div className="flex justify-end gap-3">
-                        <button type="button" onClick={onClose} className="px-4 py-2 text-gray-600 hover:text-gray-800">
-                            Cancel
-                        </button>
+                </div>
+                <div className="flex gap-2">
+                    {step > 1 && (
                         <button
-                            type="submit"
-                            disabled={saving || !form.name || !form.subject}
-                            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                            onClick={() => setStep(step - 1)}
+                            className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg dark:text-gray-300 dark:hover:bg-gray-700"
                         >
-                            {saving ? 'Creating...' : 'Create'}
+                            Previous
                         </button>
+                    )}
+                    {step < 3 ? (
+                        <button
+                            onClick={() => {
+                                if (step === 1 && (!form.name || !form.subject)) return alert('Please fill in required fields');
+                                setStep(step + 1);
+                            }}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                        >
+                            Next Step
+                        </button>
+                    ) : (
+                        <button
+                            onClick={handleSubmit}
+                            disabled={saving}
+                            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-md flex items-center gap-2"
+                        >
+                            {saving ? 'Saving...' : <><Rocket className="w-4 h-4" /> Save & Finish</>}
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Wizard Content */}
+            <div className="flex-1 overflow-hidden">
+                {step === 1 && (
+                    <div className="max-w-2xl mx-auto py-12 px-6">
+                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border p-8">
+                            <h3 className="text-xl font-bold mb-6 dark:text-white">Campaign Details</h3>
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Campaign Name</label>
+                                    <input
+                                        type="text"
+                                        value={form.name}
+                                        onChange={(e) => setForm({ ...form, name: e.target.value })}
+                                        className="w-full border dark:border-gray-600 rounded-lg p-2.5 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                                        placeholder="e.g. December Newsletter"
+                                        autoFocus
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Internal name for your reference.</p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subject Line</label>
+                                    <input
+                                        type="text"
+                                        value={form.subject}
+                                        onChange={(e) => setForm({ ...form, subject: e.target.value })}
+                                        className="w-full border dark:border-gray-600 rounded-lg p-2.5 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                                        placeholder="e.g. You won't believe this update..."
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sender Name</label>
+                                        <input
+                                            type="text"
+                                            value={form.from_name}
+                                            onChange={(e) => setForm({ ...form, from_name: e.target.value })}
+                                            className="w-full border dark:border-gray-600 rounded-lg p-2.5 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                                            placeholder="Your Name"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sender Email</label>
+                                        <input
+                                            type="email"
+                                            value={form.from_email}
+                                            onChange={(e) => setForm({ ...form, from_email: e.target.value })}
+                                            className="w-full border dark:border-gray-600 rounded-lg p-2.5 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                                            placeholder="you@yourdomain.com"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </form>
+                )}
+
+                {step === 2 && (
+                    <div className="h-full">
+                        <EmailTemplateBuilder
+                            template={{
+                                html_content: form.html_content,
+                                builder_json: typeof form.builder_json === 'string' ? JSON.parse(form.builder_json) : form.builder_json
+                            }}
+                            onSave={(data) => {
+                                setForm({
+                                    ...form,
+                                    html_content: data.html_content,
+                                    builder_json: data.builder_json
+                                });
+                            }}
+                            onPreview={(html) => {
+                                const win = window.open('', '_blank');
+                                win.document.write(html);
+                            }}
+                        />
+                    </div>
+                )}
+
+                {step === 3 && (
+                    <div className="max-w-3xl mx-auto py-12 px-6">
+                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border p-8 space-y-8">
+                            <div className="text-center">
+                                <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <Sparkles className="w-8 h-8" />
+                                </div>
+                                <h3 className="text-2xl font-bold dark:text-white">Ready to Launch?</h3>
+                                <p className="text-gray-500 mt-2">Review your campaign details before finalizing.</p>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 text-sm border-t border-b py-6 dark:border-gray-700">
+                                <div>
+                                    <span className="block text-gray-500 mb-1">Campaign</span>
+                                    <span className="font-medium dark:text-white">{form.name}</span>
+                                </div>
+                                <div>
+                                    <span className="block text-gray-500 mb-1">Subject</span>
+                                    <span className="font-medium dark:text-white">{form.subject}</span>
+                                </div>
+                                <div>
+                                    <span className="block text-gray-500 mb-1">From</span>
+                                    <span className="font-medium dark:text-white">{form.from_name} &lt;{form.from_email}&gt;</span>
+                                </div>
+                                <div>
+                                    <span className="block text-gray-500 mb-1">Content</span>
+                                    <span className="font-medium dark:text-white">
+                                        {form.html_content ? 'HTML Template Configured' : 'No Content Added'}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg text-blue-800 dark:text-blue-300 text-sm flex gap-3 items-start">
+                                <Lightbulb className="w-5 h-5 shrink-0" />
+                                <div>
+                                    <strong>Pro Tip:</strong> Ensure you have validated your sender domain in the Settings &gt; Domains page to improve deliverability.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

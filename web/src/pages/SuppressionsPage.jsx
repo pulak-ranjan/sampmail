@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Ban, Plus, Search, Trash2, AlertTriangle, UserX } from 'lucide-react';
 
 const SuppressionsPage = () => {
     const [suppressions, setSuppressions] = useState([]);
@@ -81,24 +82,28 @@ const SuppressionsPage = () => {
         <div className="p-6">
             <div className="flex items-center justify-between mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Suppression List</h1>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <Ban className="w-7 h-7 text-red-500" />
+                        Suppression List
+                    </h1>
                     <p className="text-gray-500">Emails that will not receive any campaigns</p>
                 </div>
                 <button
                     onClick={() => setShowAdd(true)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 shadow-sm"
                 >
-                    + Add Email
+                    <Plus className="w-4 h-4" /> Add Email
                 </button>
             </div>
 
-            <div className="mb-4">
+            <div className="mb-4 relative max-w-md">
+                <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
                 <input
                     type="text"
                     placeholder="Search emails..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full max-w-md px-4 py-2 border dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
+                    className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
                 />
             </div>
 

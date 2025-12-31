@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { 
-  Send, ShieldAlert, Search, Loader2, CheckCircle2, AlertTriangle, Terminal, Ban 
+import {
+  Send, ShieldAlert, Search, Loader2, CheckCircle2, AlertTriangle, Terminal, Ban
 } from "lucide-react";
 import { sendTestEmail, blockIP, checkBlacklist, checkSecurity } from "../api";
 import { cn } from "../lib/utils";
@@ -34,8 +34,8 @@ function TabButton({ id, label, icon: Icon, active, onClick }) {
       onClick={() => onClick(id)}
       className={cn(
         "flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors",
-        active === id 
-          ? "border-primary text-primary" 
+        active === id
+          ? "border-primary text-primary"
           : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted"
       )}
     >
@@ -49,8 +49,8 @@ function TestEmailPanel() {
   const [form, setForm] = useState({
     sender: "",
     recipient: "",
-    subject: "Test from KumoMTA UI",
-    body: "This is a test email sent via the KumoMTA Control Panel.\n\nTime: " + new Date().toLocaleString()
+    subject: "Test from SampMail",
+    body: "This is a test email sent via the SampMail Control Panel.\n\nTime: " + new Date().toLocaleString()
   });
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -64,7 +64,7 @@ function TestEmailPanel() {
     try {
       const res = await sendTestEmail(form);
       setResult(res);
-    } catch (err) { setError(err.message); } 
+    } catch (err) { setError(err.message); }
     finally { setLoading(false); }
   };
 
@@ -77,9 +77,9 @@ function TestEmailPanel() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium">Sender Identity</label>
-            <input 
+            <input
               value={form.sender}
-              onChange={e => setForm({...form, sender: e.target.value})}
+              onChange={e => setForm({ ...form, sender: e.target.value })}
               placeholder="editor@yourdomain.com"
               className="w-full h-10 px-3 rounded-md border bg-background text-sm"
               required
@@ -88,9 +88,9 @@ function TestEmailPanel() {
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Recipient</label>
-            <input 
+            <input
               value={form.recipient}
-              onChange={e => setForm({...form, recipient: e.target.value})}
+              onChange={e => setForm({ ...form, recipient: e.target.value })}
               placeholder="mail-tester@..."
               className="w-full h-10 px-3 rounded-md border bg-background text-sm"
               type="email"
@@ -99,18 +99,18 @@ function TestEmailPanel() {
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Subject</label>
-            <input 
+            <input
               value={form.subject}
-              onChange={e => setForm({...form, subject: e.target.value})}
+              onChange={e => setForm({ ...form, subject: e.target.value })}
               className="w-full h-10 px-3 rounded-md border bg-background text-sm"
               required
             />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Body</label>
-            <textarea 
+            <textarea
               value={form.body}
-              onChange={e => setForm({...form, body: e.target.value})}
+              onChange={e => setForm({ ...form, body: e.target.value })}
               className="w-full h-32 p-3 rounded-md border bg-background text-sm font-mono"
               required
             />

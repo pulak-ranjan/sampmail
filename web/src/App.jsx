@@ -33,6 +33,7 @@ import SegmentsPage from './pages/SegmentsPage';
 import SuppressionsPage from './pages/SuppressionsPage';
 import ProxiesPage from './pages/ProxiesPage';
 import SendingIPsPage from './pages/SendingIPsPage';
+import SSLPage from './pages/SSLPage';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -46,7 +47,7 @@ function ProtectedRoute({ children }) {
 export default function App() {
   return (
     <AuthProvider>
-      <ThemeProvider defaultTheme="dark" storageKey="kumoui-theme">
+      <ThemeProvider defaultTheme="dark" storageKey="sampmail-theme">
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<LoginRegister />} />
@@ -77,6 +78,7 @@ export default function App() {
             <Route path="/config" element={<ProtectedRoute><ConfigPage /></ProtectedRoute>} />
             <Route path="/logs" element={<ProtectedRoute><LogsPage /></ProtectedRoute>} />
             <Route path="/security" element={<ProtectedRoute><SecurityPage /></ProtectedRoute>} />
+            <Route path="/ssl" element={<ProtectedRoute><SSLPage /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
