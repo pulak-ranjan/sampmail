@@ -102,22 +102,22 @@ for BINARY in dist/sampmail-*; do
         cp scripts/install*.sh ${TEMP_DIR}/sampmail/scripts/ 2>/dev/null || true
     fi
     
-    # Create zip
-    ZIPNAME="sampmail-${VERSION}-${PLATFORM}.zip"
+    # Create tar.gz
+    TARNAME="sampmail-${PLATFORM}.tar.gz"
     cd ${TEMP_DIR}
-    zip -rq sampmail.zip sampmail/
-    mv sampmail.zip ${OLDPWD}/${RELEASE_DIR}/${ZIPNAME}
+    tar -czf sampmail.tar.gz sampmail/
+    mv sampmail.tar.gz ${OLDPWD}/${RELEASE_DIR}/${TARNAME}
     cd ${OLDPWD}
     
     # Cleanup
     rm -rf ${TEMP_DIR}
     
-    echo -e "${GREEN}  ✓ Created ${ZIPNAME}${NC}"
+    echo -e "${GREEN}  ✓ Created ${TARNAME}${NC}"
 done
 
 # Generate checksums for releases
 cd ${RELEASE_DIR}
-sha256sum *.zip > SHA256SUMS.txt
+sha256sum *.tar.gz > SHA256SUMS.txt
 cd ..
 
 echo -e "${GREEN}✓ Packages created${NC}"
@@ -154,7 +154,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
             gh release create "v${VERSION}" \
                 --title "SampMail v${VERSION}" \
                 --notes-file CHANGELOG.md \
-                ${RELEASE_DIR}/*.zip \
+                ${RELEASE_DIR}/*.tar.gz \
                 ${RELEASE_DIR}/SHA256SUMS.txt
             echo -e "${GREEN}✓ GitHub release created${NC}"
         fi
