@@ -1,7 +1,7 @@
 const API_BASE = "/api";
 
 function getToken() {
-  return localStorage.getItem("kumoui_token") || "";
+  return localStorage.getItem("sampmail_token") || ""; // Fixed key
 }
 
 export async function apiRequest(path, options = {}) {
