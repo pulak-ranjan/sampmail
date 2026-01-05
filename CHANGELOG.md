@@ -5,6 +5,18 @@ All notable changes to SampMail will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.13] - 2026-01-05
+
+### Added
+- **Multi-Tenancy**: Support for multiple organizations within a single instance.
+- **Superadmin Dashboard**: New UI for creating and managing organizations/tenants.
+- **Organization Switcher**: Sidebar control to switch between authorized organizations.
+- **Role-Based Access**: Backend middleware to enforce organization-level data isolation.
+
+### Changed
+- Refactored authentication middleware to support tenant context (`X-Organization-ID`).
+- Updated `AdminUser` model to include `IsSuperAdmin` field.
+
 ## [0.1.12] - 2025-12-29
 
 ### 🎉 Feature Release - V2 Architecture & Security Hardening
