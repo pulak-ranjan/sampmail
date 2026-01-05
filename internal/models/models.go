@@ -69,7 +69,8 @@ type AdminUser struct {
 	TwoFactorEnabled bool   `json:"has_2fa"`
 
 	// User Preferences
-	Theme string `json:"theme"`
+	Theme        string `json:"theme"`
+	IsSuperAdmin bool   `json:"is_super_admin"` // Multi-tenancy support
 }
 
 // Auth Sessions for multi-device support
@@ -94,15 +95,15 @@ type BounceAccount struct {
 
 // A sender identity associated with a domain
 type Sender struct {
-	ID       uint `gorm:"primaryKey" json:"id"`
-	DomainID uint `gorm:"index" json:"domain_id"`
+	ID       uint   `gorm:"primaryKey" json:"id"`
+	DomainID uint   `gorm:"index" json:"domain_id"`
 	Domain   Domain `json:"-" gorm:"foreignKey:DomainID"` // Relation for Warmup Logic
 
 	LocalPart    string `json:"local_part"`
 	Email        string `json:"email"`
 	IP           string `json:"ip"` // specific IP for this sender
 	SMTPPassword string `json:"smtp_password,omitempty"`
-	
+
 	BounceUsername string `json:"bounce_username"`
 
 	// Warmup State (NEW)
@@ -112,7 +113,7 @@ type Sender struct {
 	WarmupLastUpdate time.Time `json:"warmup_last_update"` // Last time we bumped the day
 
 	// Virtual field for DKIM check (computed at runtime)
-	HasDKIM bool `gorm:"-" json:"has_dkim"` 
+	HasDKIM bool `gorm:"-" json:"has_dkim"`
 }
 
 // Inventory of IPs available on the server
@@ -124,7 +125,7 @@ type SystemIP struct {
 	CreatedAt time.Time `json:"created_at"`
 
 	// Virtual Field: True if this IP is actually configured on the OS
-	IsActive  bool      `gorm:"-" json:"is_active"` 
+	IsActive bool `gorm:"-" json:"is_active"`
 }
 
 // =====================================
@@ -133,23 +134,23 @@ type SystemIP struct {
 
 // Proxy represents a SOCKS5/HTTP proxy for email verification and sending
 type Proxy struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	Name      string    `json:"name"`                        // Friendly name
-	Type      string    `json:"type"`                        // "socks5", "http", "https"
-	Host      string    `json:"host"`                        // Proxy hostname/IP
-	Port      int       `json:"port"`                        // Proxy port
-	Username  string    `json:"username,omitempty"`          // Optional auth
-	Password  string    `json:"-"`                           // Hidden in JSON
-	IsActive  bool      `gorm:"default:true" json:"is_active"` // Enable/disable
-	UseFor    string    `json:"use_for"`                     // "verification", "sending", "both"
-	Priority  int       `json:"priority"`                    // Lower = higher priority
-	
+	ID       uint   `gorm:"primaryKey" json:"id"`
+	Name     string `json:"name"`                          // Friendly name
+	Type     string `json:"type"`                          // "socks5", "http", "https"
+	Host     string `json:"host"`                          // Proxy hostname/IP
+	Port     int    `json:"port"`                          // Proxy port
+	Username string `json:"username,omitempty"`            // Optional auth
+	Password string `json:"-"`                             // Hidden in JSON
+	IsActive bool   `gorm:"default:true" json:"is_active"` // Enable/disable
+	UseFor   string `json:"use_for"`                       // "verification", "sending", "both"
+	Priority int    `json:"priority"`                      // Lower = higher priority
+
 	// Health tracking
 	LastCheck   time.Time `json:"last_check"`
 	IsHealthy   bool      `json:"is_healthy"`
 	FailCount   int       `json:"fail_count"`
 	SuccessRate float64   `json:"success_rate"`
-	
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -169,23 +170,23 @@ func (p *Proxy) ProxyURL() string {
 
 // SendingIP represents an IP address used for outbound mail
 type SendingIP struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	IPAddress string    `gorm:"uniqueIndex" json:"ip_address"` // IPv4/IPv6
-	Hostname  string    `json:"hostname"`                      // PTR record / rDNS
-	IsActive  bool      `gorm:"default:true" json:"is_active"`
-	
+	ID        uint   `gorm:"primaryKey" json:"id"`
+	IPAddress string `gorm:"uniqueIndex" json:"ip_address"` // IPv4/IPv6
+	Hostname  string `json:"hostname"`                      // PTR record / rDNS
+	IsActive  bool   `gorm:"default:true" json:"is_active"`
+
 	// Warmup tracking
-	WarmupStage    int       `json:"warmup_stage"`    // 0=cold, 1-10=warming, 10=warm
-	DailySendLimit int       `json:"daily_send_limit"`
-	TodaySent      int       `json:"today_sent"`
-	
+	WarmupStage    int `json:"warmup_stage"` // 0=cold, 1-10=warming, 10=warm
+	DailySendLimit int `json:"daily_send_limit"`
+	TodaySent      int `json:"today_sent"`
+
 	// Reputation
-	ReputationScore float64   `json:"reputation_score"` // 0-100
-	LastBounceRate  float64   `json:"last_bounce_rate"`
-	
+	ReputationScore float64 `json:"reputation_score"` // 0-100
+	LastBounceRate  float64 `json:"last_bounce_rate"`
+
 	// Assignment
-	DomainID  uint      `json:"domain_id,omitempty"` // Optional: dedicated to domain
-	
+	DomainID uint `json:"domain_id,omitempty"` // Optional: dedicated to domain
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -255,60 +256,60 @@ type ContactList struct {
 
 // Contact represents a single person/lead
 type Contact struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	ListID    uint      `gorm:"index" json:"list_id"`
-	Email     string    `gorm:"index" json:"email"`
-	FirstName string    `json:"first_name"`
-	LastName  string    `json:"last_name"`
+	ID        uint   `gorm:"primaryKey" json:"id"`
+	ListID    uint   `gorm:"index" json:"list_id"`
+	Email     string `gorm:"index" json:"email"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
 
 	// Validation Status
-	IsValid   bool      `json:"is_valid"`
-	RiskScore int       `json:"risk_score"` // 0-100 (0=safe)
-	VerifyLog string    `json:"verify_log"` // "MX ok, SMTP failed"
+	IsValid   bool   `json:"is_valid"`
+	RiskScore int    `json:"risk_score"` // 0-100 (0=safe)
+	VerifyLog string `json:"verify_log"` // "MX ok, SMTP failed"
 
 	// Engagement (AI Superlead data)
-	Score     int       `json:"score"`      // Lead Score
-	TotalOpens int      `json:"total_opens"`
-	TotalClicks int     `json:"total_clicks"`
+	Score       int `json:"score"` // Lead Score
+	TotalOpens  int `json:"total_opens"`
+	TotalClicks int `json:"total_clicks"`
 
 	CreatedAt time.Time `json:"created_at"`
 }
 
 // Campaign represents a bulk email job
 type Campaign struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	Name        string    `json:"name"`
-	Subject     string    `json:"subject"`
-	Body        string    `json:"body"`          // HTML Content
-	SenderID    uint      `json:"sender_id"`     // From which Sender identity
-	Sender      Sender    `json:"-" gorm:"foreignKey:SenderID"`
+	ID       uint   `gorm:"primaryKey" json:"id"`
+	Name     string `json:"name"`
+	Subject  string `json:"subject"`
+	Body     string `json:"body"`      // HTML Content
+	SenderID uint   `json:"sender_id"` // From which Sender identity
+	Sender   Sender `json:"-" gorm:"foreignKey:SenderID"`
 
-	Status      string    `json:"status"`        // "draft", "scheduled", "sending", "completed", "failed"
+	Status      string     `json:"status"`       // "draft", "scheduled", "sending", "completed", "failed"
 	ScheduledAt *time.Time `json:"scheduled_at"` // Nullable
 
-	TotalSent   int       `json:"total_sent"`
-	TotalFailed int       `json:"total_failed"`
-	TotalOpens  int       `json:"total_opens"`
-	TotalClicks int       `json:"total_clicks"`
+	TotalSent   int `json:"total_sent"`
+	TotalFailed int `json:"total_failed"`
+	TotalOpens  int `json:"total_opens"`
+	TotalClicks int `json:"total_clicks"`
 
-	CreatedAt   time.Time `json:"created_at"`
-	Recipients  []CampaignRecipient `json:"recipients,omitempty" gorm:"foreignKey:CampaignID"`
+	CreatedAt  time.Time           `json:"created_at"`
+	Recipients []CampaignRecipient `json:"recipients,omitempty" gorm:"foreignKey:CampaignID"`
 }
 
 // CampaignRecipient tracks individual status in a campaign
 type CampaignRecipient struct {
-	ID         uint      `gorm:"primaryKey" json:"id"`
-	CampaignID uint      `gorm:"index" json:"campaign_id"`
-	Email      string    `gorm:"index" json:"email"`
-	ContactID  uint      `gorm:"index" json:"contact_id"` // Optional link to persistent contact
+	ID         uint   `gorm:"primaryKey" json:"id"`
+	CampaignID uint   `gorm:"index" json:"campaign_id"`
+	Email      string `gorm:"index" json:"email"`
+	ContactID  uint   `gorm:"index" json:"contact_id"` // Optional link to persistent contact
 
-	Status     string    `json:"status"` // "pending", "sent", "failed"
-	Error      string    `json:"error,omitempty"`
-	SentAt     time.Time `json:"sent_at,omitempty"`
+	Status string    `json:"status"` // "pending", "sent", "failed"
+	Error  string    `json:"error,omitempty"`
+	SentAt time.Time `json:"sent_at,omitempty"`
 
 	// Tracking
-	OpenedAt   *time.Time `json:"opened_at"`
-	ClickedAt  *time.Time `json:"clicked_at"`
+	OpenedAt  *time.Time `json:"opened_at"`
+	ClickedAt *time.Time `json:"clicked_at"`
 }
 
 // AutomationWorkflow represents a visual automation flow
@@ -323,13 +324,13 @@ type AutomationWorkflow struct {
 
 // WhatsAppMessage represents a message sent via WhatsApp Cloud API
 type WhatsAppMessage struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	ContactID   uint      `gorm:"index" json:"contact_id"`
-	ToNumber    string    `json:"to_number"`
-	Body        string    `json:"body"`
-	Status      string    `json:"status"` // sent, delivered, read
-	MessageSID  string    `json:"message_sid"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	ContactID  uint      `gorm:"index" json:"contact_id"`
+	ToNumber   string    `json:"to_number"`
+	Body       string    `json:"body"`
+	Status     string    `json:"status"` // sent, delivered, read
+	MessageSID string    `json:"message_sid"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 // Suppression represents an email that should never be sent to
@@ -345,8 +346,8 @@ type Suppression struct {
 type BounceEvent struct {
 	ID             uint      `gorm:"primaryKey" json:"id"`
 	Email          string    `gorm:"index" json:"email"`
-	BounceType     string    `json:"bounce_type"`   // "hard", "soft", "complaint"
-	BounceCode     string    `json:"bounce_code"`   // e.g., "550", "452"
+	BounceType     string    `json:"bounce_type"` // "hard", "soft", "complaint"
+	BounceCode     string    `json:"bounce_code"` // e.g., "550", "452"
 	DiagnosticCode string    `json:"diagnostic_code"`
 	CampaignID     uint      `gorm:"index" json:"campaign_id"`
 	ProcessedAt    time.Time `json:"processed_at"`
@@ -390,10 +391,10 @@ type Template struct {
 // CustomField defines a custom field for subscribers
 type CustomField struct {
 	ID           uint      `gorm:"primaryKey" json:"id"`
-	Name         string    `json:"name"`                       // Display name
+	Name         string    `json:"name"`                         // Display name
 	FieldKey     string    `gorm:"uniqueIndex" json:"field_key"` // Internal key (snake_case)
-	FieldType    string    `json:"field_type"`                 // text, number, date, boolean, dropdown
-	Options      string    `json:"options"`                    // JSON array for dropdown options
+	FieldType    string    `json:"field_type"`                   // text, number, date, boolean, dropdown
+	Options      string    `json:"options"`                      // JSON array for dropdown options
 	IsRequired   bool      `json:"is_required"`
 	DefaultValue string    `json:"default_value"`
 	SortOrder    int       `json:"sort_order"`
@@ -444,10 +445,10 @@ type Segment struct {
 type ABTest struct {
 	ID               uint       `gorm:"primaryKey" json:"id"`
 	CampaignID       uint       `gorm:"uniqueIndex" json:"campaign_id"`
-	TestType         string     `json:"test_type"`        // subject, content, send_time
-	Variants         string     `json:"variants"`         // JSON array of variants
-	WinnerVariant    string     `json:"winner_variant"`   // A, B, etc.
-	WinnerMetric     string     `json:"winner_metric"`    // opens, clicks
+	TestType         string     `json:"test_type"`      // subject, content, send_time
+	Variants         string     `json:"variants"`       // JSON array of variants
+	WinnerVariant    string     `json:"winner_variant"` // A, B, etc.
+	WinnerMetric     string     `json:"winner_metric"`  // opens, clicks
 	WinnerSelectedAt *time.Time `json:"winner_selected_at"`
 	SampleSizePct    int        `json:"sample_size_pct"` // % of list for test
 	TestDurationHrs  int        `json:"test_duration_hrs"`
@@ -456,14 +457,14 @@ type ABTest struct {
 
 // ABTestVariant represents a single variant (embedded in ABTest.Variants JSON)
 type ABTestVariant struct {
-	Name      string `json:"name"`    // A, B, C...
-	Subject   string `json:"subject"` // For subject tests
-	Content   string `json:"content"` // For content tests
-	SendTime  string `json:"send_time"` // For send time tests
-	Weight    int    `json:"weight"`  // % weight (default 50/50)
-	Sent      int    `json:"sent"`
-	Opens     int    `json:"opens"`
-	Clicks    int    `json:"clicks"`
+	Name     string `json:"name"`      // A, B, C...
+	Subject  string `json:"subject"`   // For subject tests
+	Content  string `json:"content"`   // For content tests
+	SendTime string `json:"send_time"` // For send time tests
+	Weight   int    `json:"weight"`    // % weight (default 50/50)
+	Sent     int    `json:"sent"`
+	Opens    int    `json:"opens"`
+	Clicks   int    `json:"clicks"`
 }
 
 // =====================================
@@ -506,19 +507,19 @@ type DomainReputation struct {
 
 // AutomationWorkflowV2 is the enhanced visual workflow
 type AutomationWorkflowV2 struct {
-	ID            uint      `gorm:"primaryKey" json:"id"`
-	Name          string    `json:"name"`
-	Description   string    `json:"description"`
-	TriggerType   string    `json:"trigger_type"`   // subscribe, tag_added, email_opened, etc.
-	TriggerConfig string    `json:"trigger_config"` // JSON config for trigger
-	Nodes         string    `json:"nodes"`          // React Flow nodes JSON
-	Edges         string    `json:"edges"`          // React Flow edges JSON
-	IsActive      bool      `json:"is_active"`
-	StatsEntered  int       `json:"stats_entered"`
-	StatsCompleted int      `json:"stats_completed"`
-	StatsActive   int       `json:"stats_active"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	Name           string    `json:"name"`
+	Description    string    `json:"description"`
+	TriggerType    string    `json:"trigger_type"`   // subscribe, tag_added, email_opened, etc.
+	TriggerConfig  string    `json:"trigger_config"` // JSON config for trigger
+	Nodes          string    `json:"nodes"`          // React Flow nodes JSON
+	Edges          string    `json:"edges"`          // React Flow edges JSON
+	IsActive       bool      `json:"is_active"`
+	StatsEntered   int       `json:"stats_entered"`
+	StatsCompleted int       `json:"stats_completed"`
+	StatsActive    int       `json:"stats_active"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // AutomationRun tracks individual subscriber runs through a workflow
@@ -526,8 +527,8 @@ type AutomationRun struct {
 	ID           uint       `gorm:"primaryKey" json:"id"`
 	WorkflowID   uint       `gorm:"index" json:"workflow_id"`
 	ContactID    uint       `gorm:"index" json:"contact_id"`
-	CurrentNode  string     `json:"current_node"`  // Node ID currently at
-	Status       string     `json:"status"`        // running, completed, failed, paused
+	CurrentNode  string     `json:"current_node"` // Node ID currently at
+	Status       string     `json:"status"`       // running, completed, failed, paused
 	StartedAt    time.Time  `json:"started_at"`
 	CompletedAt  *time.Time `json:"completed_at"`
 	NextActionAt *time.Time `json:"next_action_at"` // For wait nodes

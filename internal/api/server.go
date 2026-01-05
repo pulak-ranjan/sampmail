@@ -14,7 +14,6 @@ import (
 	"github.com/pulak-ranjan/sampmail/internal/config"
 	"github.com/pulak-ranjan/sampmail/internal/core"
 	"github.com/pulak-ranjan/sampmail/internal/middleware/custom"
-	"github.com/pulak-ranjan/sampmail/internal/models"
 	"github.com/pulak-ranjan/sampmail/internal/store"
 )
 
@@ -23,10 +22,6 @@ type Server struct {
 	WS     *core.WebhookService
 	Router chi.Router
 }
-
-const adminContextKey contextKey = "admin"
-
-type contextKey string
 
 func NewServer(st *store.Store, ws *core.WebhookService) *Server {
 	s := &Server{Store: st, WS: ws}
@@ -323,61 +318,77 @@ func (s *Server) routes() chi.Router {
 		// API V2 - Templates, Automations, Campaigns
 		// =====================================
 
-		// Templates V2 - Drag & Drop Builder
-		templateV2 := NewTemplateHandlerV2(s.Store)
-		r.Get("/api/v2/templates", templateV2.ListTemplates)
-		r.Post("/api/v2/templates", templateV2.CreateTemplate)
-		r.Get("/api/v2/templates/{id}", templateV2.GetTemplate)
-		r.Put("/api/v2/templates/{id}", templateV2.UpdateTemplate)
-		r.Delete("/api/v2/templates/{id}", templateV2.DeleteTemplate)
-		r.Post("/api/v2/templates/generate", templateV2.GenerateWithAI)
-		r.Post("/api/v2/templates/preview", templateV2.PreviewTemplate)
-		r.Get("/api/v2/templates/library", templateV2.GetBuiltInTemplates)
-		r.Get("/api/v2/templates/library/{templateId}", templateV2.GetBuiltInTemplateContent)
-		r.Get("/api/v2/templates/variables", templateV2.GetVariables)
+		// Group that requires Organization Context
+		r.Group(func(r chi.Router) {
+			r.Use(s.organizationMiddleware) // <--- Enforce Organization Context
 
-		// Automations V2 - Drag & Drop Workflow Builder
-		automationV2 := NewAutomationHandlerV2(s.Store)
-		r.Get("/api/v2/automations", automationV2.ListAutomations)
-		r.Post("/api/v2/automations", automationV2.CreateAutomation)
-		r.Get("/api/v2/automations/{id}", automationV2.GetAutomation)
-		r.Put("/api/v2/automations/{id}", automationV2.UpdateAutomation)
-		r.Delete("/api/v2/automations/{id}", automationV2.DeleteAutomation)
-		r.Post("/api/v2/automations/{id}/activate", automationV2.ActivateAutomation)
-		r.Post("/api/v2/automations/{id}/pause", automationV2.PauseAutomation)
-		r.Get("/api/v2/automations/{id}/stats", automationV2.GetAutomationStats)
-		r.Get("/api/v2/automations/{id}/runs", automationV2.GetAutomationRuns)
-		r.Get("/api/v2/automations/node-types", automationV2.GetNodeTypes)
+			// Templates V2 - Drag & Drop Builder
+			templateV2 := NewTemplateHandlerV2(s.Store)
+			r.Get("/api/v2/templates", templateV2.ListTemplates)
+			r.Post("/api/v2/templates", templateV2.CreateTemplate)
+			r.Get("/api/v2/templates/{id}", templateV2.GetTemplate)
+			r.Put("/api/v2/templates/{id}", templateV2.UpdateTemplate)
+			r.Delete("/api/v2/templates/{id}", templateV2.DeleteTemplate)
+			r.Post("/api/v2/templates/generate", templateV2.GenerateWithAI)
+			r.Post("/api/v2/templates/preview", templateV2.PreviewTemplate)
+			r.Get("/api/v2/templates/library", templateV2.GetBuiltInTemplates)
+			r.Get("/api/v2/templates/library/{templateId}", templateV2.GetBuiltInTemplateContent)
+			r.Get("/api/v2/templates/variables", templateV2.GetVariables)
 
-		// Campaigns V2 - Enhanced with personalization
-		campaignV2 := NewCampaignHandlerV2(s.Store)
-		r.Get("/api/v2/campaigns", campaignV2.ListCampaigns)
-		r.Post("/api/v2/campaigns", campaignV2.CreateCampaign)
-		r.Get("/api/v2/campaigns/{id}", campaignV2.GetCampaign)
-		r.Put("/api/v2/campaigns/{id}", campaignV2.UpdateCampaign)
-		r.Post("/api/v2/campaigns/{id}/preview", campaignV2.PreviewCampaign)
+			// Automations V2 - Drag & Drop Workflow Builder
+			automationV2 := NewAutomationHandlerV2(s.Store)
+			r.Get("/api/v2/automations", automationV2.ListAutomations)
+			r.Post("/api/v2/automations", automationV2.CreateAutomation)
+			r.Get("/api/v2/automations/{id}", automationV2.GetAutomation)
+			r.Put("/api/v2/automations/{id}", automationV2.UpdateAutomation)
+			r.Delete("/api/v2/automations/{id}", automationV2.DeleteAutomation)
+			r.Post("/api/v2/automations/{id}/activate", automationV2.ActivateAutomation)
+			r.Post("/api/v2/automations/{id}/pause", automationV2.PauseAutomation)
+			r.Get("/api/v2/automations/{id}/stats", automationV2.GetAutomationStats)
+			r.Get("/api/v2/automations/{id}/runs", automationV2.GetAutomationRuns)
+			r.Get("/api/v2/automations/node-types", automationV2.GetNodeTypes)
+
+			// Campaigns V2 - Enhanced with personalization
+			campaignV2 := NewCampaignHandlerV2(s.Store)
+			r.Get("/api/v2/campaigns", campaignV2.ListCampaigns)
+			r.Post("/api/v2/campaigns", campaignV2.CreateCampaign)
+			r.Get("/api/v2/campaigns/{id}", campaignV2.GetCampaign)
+			r.Put("/api/v2/campaigns/{id}", campaignV2.UpdateCampaign)
+			r.Post("/api/v2/campaigns/{id}/preview", campaignV2.PreviewCampaign)
+
+			// Subscriber Lists
+			listHandler := NewListHandler(s.Store)
+			r.Get("/api/v2/lists", listHandler.ListLists)
+			r.Post("/api/v2/lists", listHandler.CreateList)
+			r.Get("/api/v2/lists/{id}", listHandler.GetList)
+			r.Put("/api/v2/lists/{id}", listHandler.UpdateList)
+			r.Delete("/api/v2/lists/{id}", listHandler.DeleteList)
+			r.Get("/api/v2/lists/{id}/subscribers", listHandler.ListSubscribers)
+			r.Post("/api/v2/lists/{id}/subscribers", listHandler.AddSubscriber)
+			r.Delete("/api/v2/lists/{id}/subscribers/{contactId}", listHandler.RemoveSubscriber)
+			r.Post("/api/v2/lists/{id}/subscribers/{contactId}/unsubscribe", listHandler.UnsubscribeFromList)
+			r.Post("/api/v2/lists/{id}/import", listHandler.ImportSubscribers)
+			r.Get("/api/v2/lists/{id}/export", listHandler.ExportSubscribers)
+			r.Post("/api/v2/lists/{id}/copy", listHandler.CopySubscribers)
+			r.Get("/api/v2/lists/{id}/stats", listHandler.GetListStats)
+		})
+
+		// Superadmin Management
+		r.Group(func(r chi.Router) {
+			// Superadmin routes don't strictly require Org Context (they manage Orgs)
+			// Implementation checks IsSuperAdmin inside handlers
+			adminOrgHandler := NewOrganizationHandler(s.Store)
+			r.Get("/api/v2/admin/organizations", adminOrgHandler.ListOrganizations)
+			r.Post("/api/v2/admin/organizations", adminOrgHandler.CreateOrganization)
+			r.Delete("/api/v2/admin/organizations/{id}", adminOrgHandler.DeleteOrganization)
+		})
 
 		// Organizations (Multi-tenancy)
+		// Available globally to authenticated users (to select/switch)
 		orgHandler := NewOrganizationHandler(s.Store)
 		r.Get("/api/v2/organizations/{id}", orgHandler.GetOrganization)
 		r.Put("/api/v2/organizations/{id}", orgHandler.UpdateOrganization)
 		r.Get("/api/v2/organizations/{id}/usage", orgHandler.GetOrganizationUsage)
-
-		// Subscriber Lists
-		listHandler := NewListHandler(s.Store)
-		r.Get("/api/v2/lists", listHandler.ListLists)
-		r.Post("/api/v2/lists", listHandler.CreateList)
-		r.Get("/api/v2/lists/{id}", listHandler.GetList)
-		r.Put("/api/v2/lists/{id}", listHandler.UpdateList)
-		r.Delete("/api/v2/lists/{id}", listHandler.DeleteList)
-		r.Get("/api/v2/lists/{id}/subscribers", listHandler.ListSubscribers)
-		r.Post("/api/v2/lists/{id}/subscribers", listHandler.AddSubscriber)
-		r.Delete("/api/v2/lists/{id}/subscribers/{contactId}", listHandler.RemoveSubscriber)
-		r.Post("/api/v2/lists/{id}/subscribers/{contactId}/unsubscribe", listHandler.UnsubscribeFromList)
-		r.Post("/api/v2/lists/{id}/import", listHandler.ImportSubscribers)
-		r.Get("/api/v2/lists/{id}/export", listHandler.ExportSubscribers)
-		r.Post("/api/v2/lists/{id}/copy", listHandler.CopySubscribers)
-		r.Get("/api/v2/lists/{id}/stats", listHandler.GetListStats)
 	})
 
 	// --- Metrics endpoint (if enabled) ---
@@ -394,39 +405,6 @@ func (s *Server) routes() chi.Router {
 }
 
 // ... (Rest of file same as before) ...
-func (s *Server) authMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "missing authorization header"})
-			return
-		}
-
-		token := strings.TrimPrefix(authHeader, "Bearer ")
-		if token == authHeader {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid authorization format"})
-			return
-		}
-
-		// Hash the token to look up in database (we store hashes, not raw tokens)
-		tokenHash := hashSessionToken(token)
-		admin, err := s.Store.GetAdminBySessionToken(tokenHash)
-		if err != nil {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid or expired token"})
-			return
-		}
-
-		ctx := context.WithValue(r.Context(), adminContextKey, admin)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
-func getAdminFromContext(ctx context.Context) *models.AdminUser {
-	if u, ok := ctx.Value(adminContextKey).(*models.AdminUser); ok {
-		return u
-	}
-	return nil
-}
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")

@@ -35,12 +35,20 @@ import ProxiesPage from './pages/ProxiesPage';
 import SendingIPsPage from './pages/SendingIPsPage';
 import SSLPage from './pages/SSLPage';
 
+import TenantsPage from './pages/admin/TenantsPage';
+
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
-
   if (loading) return <div className="flex items-center justify-center min-h-screen bg-background text-muted-foreground">Loading...</div>;
   if (!user) return <Navigate to="/login" replace />;
+  return <Layout>{children}</Layout>;
+}
 
+function SuperAdminRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="flex items-center justify-center min-h-screen bg-background text-muted-foreground">Loading...</div>;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!user.is_super_admin) return <Navigate to="/" replace />;
   return <Layout>{children}</Layout>;
 }
 
@@ -52,6 +60,10 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<LoginRegister />} />
 
+            {/* Superadmin Routes */}
+            <Route path="/admin/tenants" element={<SuperAdminRoute><TenantsPage /></SuperAdminRoute>} />
+
+            {/* App Routes */}
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/campaigns" element={<ProtectedRoute><CampaignsPage /></ProtectedRoute>} />
             <Route path="/automations" element={<ProtectedRoute><AutomationsPage /></ProtectedRoute>} />

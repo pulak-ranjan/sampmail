@@ -8,18 +8,36 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(!!token);
 
+  // Multi-tenancy State
+  const [organizations, setOrganizations] = useState([]);
+  const [currentOrganization, setCurrentOrganization] = useState(null);
+
   useEffect(() => {
     if (!token) {
       setUser(null);
+      setOrganizations([]);
+      setCurrentOrganization(null);
       setLoading(false);
       return;
     }
     (async () => {
       try {
-        const u = await apiMe();
+        const u = await apiMe(); // Note: apiMe might need update to return orgs if session persists? 
+        // Actually, apiMe usually returns minimal user info. 
+        // We might need to fetch orgs separately or update apiMe. 
+        // For now, let's assume we load orgs from localStorage or fetch them.
+        // Ideally, apiMe should return "organizations" too.
         setUser(u);
+
+        // Load stored org ID
+        const storedOrgId = localStorage.getItem("sampmail_org_id");
+        if (storedOrgId && u.organizations) {
+          const org = u.organizations.find(o => o.id === parseInt(storedOrgId));
+          if (org) setCurrentOrganization(org);
+        }
       } catch {
         localStorage.removeItem("sampmail_token");
+        localStorage.removeItem("sampmail_org_id"); // Clear org
         setToken("");
         setUser(null);
       } finally {
@@ -37,10 +55,43 @@ export function AuthProvider({ children }) {
     }
 
     // Normal login success
-    localStorage.setItem("sampmail_token", res.token);
-    setToken(res.token);
-    setUser({ email: res.email });
+    finishLogin(res);
     return res;
+  };
+
+  const finishLogin = (data) => {
+    localStorage.setItem("sampmail_token", data.token);
+    setToken(data.token);
+
+    const userData = {
+      email: data.email,
+      is_super_admin: data.is_super_admin,
+      organizations: data.organizations
+    };
+    setUser(userData);
+    setOrganizations(data.organizations || []);
+
+    // Auto-select Organization
+    // 1. If SuperAdmin and no orgs ? Global View (currentOrganization = null)
+    // 2. If User has orgs, select first or stored
+    if (data.organizations && data.organizations.length > 0) {
+      const storedOrgId = localStorage.getItem("sampmail_org_id");
+      let org = null;
+
+      if (storedOrgId) {
+        org = data.organizations.find(o => o.id === parseInt(storedOrgId));
+      }
+
+      if (!org) {
+        org = data.organizations[0]; // Default to first
+      }
+
+      selectOrganization(org);
+    } else {
+      // No orgs. If superadmin, that's fine (Global). If not, user has no access.
+      localStorage.removeItem("sampmail_org_id");
+      setCurrentOrganization(null);
+    }
   };
 
   // FIX: New helper for 2FA verification step
@@ -59,23 +110,36 @@ export function AuthProvider({ children }) {
       throw new Error(data.error || 'Verification failed');
     }
 
-    localStorage.setItem("sampmail_token", data.token);
-    setToken(data.token);
-    setUser({ email: data.email });
+    finishLogin(data);
     return data;
   };
 
   const handleRegister = async (email, password) => {
     const res = await registerAdmin(email, password);
-    localStorage.setItem("sampmail_token", res.token);
-    setToken(res.token);
-    setUser({ email: res.email });
+    // Register likely doesn't verify Org yet. 
+    finishLogin(res);
   };
 
   const logout = () => {
     localStorage.removeItem("sampmail_token");
+    localStorage.removeItem("sampmail_org_id");
     setToken("");
     setUser(null);
+    setOrganizations([]);
+    setCurrentOrganization(null);
+  };
+
+  const selectOrganization = (org) => {
+    if (!org) {
+      localStorage.removeItem("sampmail_org_id");
+      setCurrentOrganization(null);
+      return;
+    }
+    localStorage.setItem("sampmail_org_id", org.id);
+    setCurrentOrganization(org);
+    // Optional: Force reload to ensure all data is refreshed?
+    // window.location.reload(); 
+    // Better: Just let React state update trigger re-renders of components using Context.
   };
 
   return (
@@ -84,8 +148,11 @@ export function AuthProvider({ children }) {
         token,
         user,
         loading,
+        organizations,
+        currentOrganization,
+        selectOrganization,
         login: handleLogin,
-        verify2FA, // Export new function
+        verify2FA,
         register: handleRegister,
         logout
       }}

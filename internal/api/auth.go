@@ -27,10 +27,10 @@ type authRequest struct {
 }
 
 type authResponse struct {
-	Token        string `json:"token,omitempty"`
-	Email        string `json:"email"`
-	Requires2FA  bool   `json:"requires_2fa,omitempty"`
-	TempToken    string `json:"temp_token,omitempty"`
+	Token       string `json:"token,omitempty"`
+	Email       string `json:"email"`
+	Requires2FA bool   `json:"requires_2fa,omitempty"`
+	TempToken   string `json:"temp_token,omitempty"`
 }
 
 type setup2FARequest struct {
@@ -230,7 +230,43 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, authResponse{Token: token, Email: admin.Email})
+	// Fetch user's organizations
+	var memberships []models.OrganizationUser
+	// Preload the Organization data
+	if err := s.Store.DB.Preload("Organization").Where("admin_id = ?", admin.ID).Find(&memberships).Error; err != nil {
+		// Log error but allow login (user might be pending or superadmin with no orgs)
+		s.Store.LogError(err)
+	}
+
+	orgs := make([]map[string]interface{}, 0)
+	for _, m := range memberships {
+		// We can't access m.Organization fields directly if it wasn't preloaded correctly or if struct is different
+		// But Preload("Organization") should populate it if Organization struct has basic fields
+		// We'll trust GORM here or manually fetch if needed.
+		// Assuming OrganizationUser has Organization struct field OR we need to fetch manually.
+		// "Organization" field is not in OrganizationUser definition in models_v2.go (Wait, let me check)
+		// models_v2.go: Users []OrganizationUser `json:"users,omitempty" gorm:"foreignKey:OrganizationID"` in Organization
+		// But OrganizationUser has: OrganizationID uint
+		// Use manual fetch or join if relation isn't defined on OrganizationUser side.
+
+		// For safety/speed, let's just fetch org details manually for now since models.go might lack the reverse pointer
+		var org models.Organization
+		if err := s.Store.DB.First(&org, m.OrganizationID).Error; err == nil {
+			orgs = append(orgs, map[string]interface{}{
+				"id":   org.ID,
+				"name": org.Name,
+				"slug": org.Slug,
+				"role": m.Role,
+			})
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"token":          token,
+		"email":          admin.Email,
+		"is_super_admin": admin.IsSuperAdmin,
+		"organizations":  orgs,
+	})
 }
 
 // POST /api/auth/verify-2fa
@@ -284,9 +320,9 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"email":       admin.Email,
-		"theme":       admin.Theme,
-		"has_2fa":     admin.TwoFactorEnabled,
+		"email":   admin.Email,
+		"theme":   admin.Theme,
+		"has_2fa": admin.TwoFactorEnabled,
 	})
 }
 

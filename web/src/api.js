@@ -11,6 +11,10 @@ export async function apiRequest(path, options = {}) {
   if (auth) {
     const token = getToken();
     if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    // Multi-tenancy: Organization Context
+    const orgId = localStorage.getItem("sampmail_org_id");
+    if (orgId) headers["X-Organization-ID"] = orgId;
   }
 
   const res = await fetch(`${API_BASE}${path}`, {
@@ -200,6 +204,22 @@ export function applyBounces() {
 // Logs
 export function getLogs(service, lines = 100) {
   return apiRequest(`/logs/${service}?lines=${lines}`);
+}
+
+// --- Admin: Tenants ---
+export function adminListTenants() {
+  return apiRequest("/admin/organizations"); // V2
+}
+
+export function adminCreateTenant(tenant) {
+  return apiRequest("/admin/organizations", {
+    method: "POST",
+    body: tenant
+  });
+}
+
+export function adminDeleteTenant(id) {
+  return apiRequest(`/admin/organizations/${id}`, { method: "DELETE" });
 }
 
 // --- Tools & Security ---

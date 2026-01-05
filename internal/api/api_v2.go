@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/pulak-ranjan/sampmail/internal/core"
@@ -645,4 +646,90 @@ func (h *OrganizationHandler) GetOrganizationUsage(w http.ResponseWriter, r *htt
 		"campaigns_created": campaignCount,
 		"plan":              org.Plan,
 	})
+}
+
+// ListOrganizations (Superadmin)
+func (h *OrganizationHandler) ListOrganizations(w http.ResponseWriter, r *http.Request) {
+	admin := getAdminFromContext(r.Context())
+	if admin == nil || !admin.IsSuperAdmin {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "superadmin access required"})
+		return
+	}
+
+	var orgs []models.Organization
+	if err := h.store.DB.Order("created_at DESC").Find(&orgs).Error; err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, orgs)
+}
+
+// CreateOrganization (Superadmin)
+func (h *OrganizationHandler) CreateOrganization(w http.ResponseWriter, r *http.Request) {
+	admin := getAdminFromContext(r.Context())
+	if admin == nil || !admin.IsSuperAdmin {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "superadmin access required"})
+		return
+	}
+
+	var req struct {
+		Name string `json:"name"`
+		Slug string `json:"slug"`
+		Plan string `json:"plan"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+
+	org := models.Organization{
+		Name:      req.Name,
+		Slug:      req.Slug,
+		Plan:      req.Plan,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		// Defaults
+		MaxUsers:    5,
+		MaxContacts: 1000,
+		MaxEmails:   10000,
+	}
+
+	if err := h.store.DB.Create(&org).Error; err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	// Add Creator as Owner
+	membership := models.OrganizationUser{
+		OrganizationID: org.ID,
+		AdminID:        admin.ID,
+		Role:           "owner",
+		JoinedAt:       func() *time.Time { t := time.Now(); return &t }(),
+	}
+	h.store.DB.Create(&membership)
+
+	writeJSON(w, http.StatusCreated, org)
+}
+
+// DeleteOrganization (Superadmin)
+func (h *OrganizationHandler) DeleteOrganization(w http.ResponseWriter, r *http.Request) {
+	admin := getAdminFromContext(r.Context())
+	if admin == nil || !admin.IsSuperAdmin {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "superadmin access required"})
+		return
+	}
+
+	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
+
+	// Delete Org (Cascading deletes should be handled by DB or explicit logic, for now simple delete)
+	if err := h.store.DB.Delete(&models.Organization{}, id).Error; err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	// Cleanup memberships
+	h.store.DB.Where("organization_id = ?", id).Delete(&models.OrganizationUser{})
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }

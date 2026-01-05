@@ -3,12 +3,14 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, BarChart3, Globe, ShieldCheck, Key, MailWarning, Network,
   ListOrdered, Webhook, Settings, FileText, Lock, LogOut, Menu, X, ServerCog,
-  Wrench, Thermometer, Mail, Users, Tag, PieChart, Send, Zap, List, Filter, Ban, Radio, ShieldAlert
+  Wrench, Thermometer, Mail, Users, Tag, PieChart, Send, Zap, List, Filter, Ban, Radio, ShieldAlert, Building
 } from 'lucide-react';
 import { ThemeToggle } from './ThemeProvider';
 import { useAuth } from '../AuthContext';
 import { cn } from '../lib/utils';
 import AIAssistant from './AIAssistant';
+
+import OrganizationSwitcher from './OrganizationSwitcher';
 
 export default function Layout({ children }) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -96,10 +98,24 @@ export default function Layout({ children }) {
           </div>
         </div>
 
+        <div className="px-3 pt-4 mb-2">
+          <OrganizationSwitcher />
+        </div>
+
         <nav className="flex-1 overflow-y-auto p-4 space-y-1">
           {links.map((link) => (
             <NavItem key={link.path} link={link} onClick={() => setIsMobileOpen(false)} />
           ))}
+
+          {/* Superadmin Section */}
+          {user?.is_super_admin && (
+            <div className="pt-4 mt-4 border-t border-border">
+              <div className="px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                Superadmin
+              </div>
+              <NavItem link={{ path: '/admin/tenants', icon: Building, label: 'Manage Tenants' }} onClick={() => setIsMobileOpen(false)} />
+            </div>
+          )}
         </nav>
 
         <div className="p-4 border-t space-y-4">
