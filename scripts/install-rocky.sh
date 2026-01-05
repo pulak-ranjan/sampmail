@@ -454,7 +454,7 @@ if [[ "$INSTALL_KUMOMTA" == true ]]; then
     KUMOMTA_INSTALLED=false
 
     # Method 1: Official repo using dnf config-manager (same as kumomta-ui)
-    if dnf config-manager --add-repo https://openrepo.kumomta.com/files/kumomta-rocky.repo 2>/dev/null; then
+    if dnf config-manager --add-repo https://openrepo.kumomta.com/files/kumomta-el9.repo 2>/dev/null; then
         if $PKG_MGR install -y kumomta 2>/dev/null; then
             KUMOMTA_INSTALLED=true
             log_success "KumoMTA installed from official repo"
