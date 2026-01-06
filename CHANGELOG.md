@@ -5,6 +5,19 @@ All notable changes to SampMail will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.18] - 2026-01-06
+
+### Fixed
+- **Layout.jsx**: Fixed `ReferenceError: user is not defined` crash on dashboard load
+- **api.js**: Fixed admin tenant API routes to match backend (`/v2/admin/organizations`)
+- **api.js**: Removed duplicate function declarations
+
+### Added
+- **DNS & IP Reputation Guide**: New comprehensive documentation at `docs/DNS_AND_REPUTATION.md`
+- **Credits**: Added acknowledgments for KumoMTA and Reacher.email in README
+
+---
+
 ## [0.1.16] - 2026-01-06
 
 ### 🛡️ Security & Scalability Release

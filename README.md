@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.1.16-blue.svg" alt="Version 0.1.16">
+  <img src="https://img.shields.io/badge/version-0.1.18-blue.svg" alt="Version 0.1.18">
   <img src="https://img.shields.io/badge/license-AGPL--3.0-green.svg" alt="License AGPL-3.0">
   <img src="https://img.shields.io/badge/go-1.21+-00ADD8.svg" alt="Go 1.21+">
   <img src="https://img.shields.io/badge/node-18+-339933.svg" alt="Node 18+">
@@ -477,6 +477,7 @@ See [LICENSE.md](LICENSE.md) for the full license text.
 ### Documentation
 - [Installation Guide](docs/INSTALLATION.md)
 - [API Reference](docs/API.md)
+- [DNS & IP Reputation Guide](docs/DNS_AND_REPUTATION.md) ⚠️ **Important**
 - [Security Policy](docs/SECURITY.md)
 - [Changelog](docs/CHANGELOG.md)
 
@@ -495,10 +496,18 @@ For enterprise support, custom development, or consulting:
 
 SampMail is built with these amazing open-source projects:
 
+### Core Infrastructure
+- [KumoMTA](https://kumomta.com/) - High-performance MTA (Mail Transfer Agent)
+- [Reacher.email](https://reacher.email/) - Email verification service
+
+### Backend
 - [Go](https://golang.org/) - Backend language
-- [React](https://reactjs.org/) - Frontend framework
 - [Chi](https://github.com/go-chi/chi) - HTTP router
 - [GORM](https://gorm.io/) - ORM
+- [Redis](https://redis.io/) - Caching and delayed queue
+
+### Frontend
+- [React](https://reactjs.org/) - Frontend framework
 - [Tailwind CSS](https://tailwindcss.com/) - Styling
 - [Lucide](https://lucide.dev/) - Icons
 
