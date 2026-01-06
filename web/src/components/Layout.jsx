@@ -14,7 +14,7 @@ import OrganizationSwitcher from './OrganizationSwitcher';
 
 export default function Layout({ children }) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
