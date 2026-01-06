@@ -119,3 +119,34 @@ func getOrganizationFromContext(ctx context.Context) *models.Organization {
 	}
 	return nil
 }
+
+// internalOnlyMiddleware restricts access to localhost only
+// Used for internal APIs that KumoMTA Lua calls
+func internalOnlyMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Check if request is from localhost
+		remoteIP := r.RemoteAddr
+
+		// Extract IP (may include port)
+		if colonIdx := strings.LastIndex(remoteIP, ":"); colonIdx != -1 {
+			remoteIP = remoteIP[:colonIdx]
+		}
+
+		// Allow localhost and loopback
+		allowed := []string{"127.0.0.1", "::1", "localhost", "[::1]"}
+		isAllowed := false
+		for _, ip := range allowed {
+			if remoteIP == ip || strings.HasPrefix(remoteIP, ip) {
+				isAllowed = true
+				break
+			}
+		}
+
+		if !isAllowed {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "internal API only"})
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}

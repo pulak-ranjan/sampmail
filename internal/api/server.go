@@ -401,6 +401,18 @@ func (s *Server) routes() chi.Router {
 	r.Get("/health/live", s.handleLivenessCheck)
 	r.Get("/health/ready", s.handleReadinessCheck)
 
+	// --- Internal Policy API (for KumoMTA Lua integration) ---
+	// Protected by IP whitelist (localhost only) - no auth tokens
+	r.Route("/api/internal/policy", func(r chi.Router) {
+		r.Use(internalOnlyMiddleware) // Restrict to localhost
+		policy := NewPolicyHandler(s.Store)
+		r.Get("/sending-ips", policy.HandleGetSendingIPs)
+		r.Get("/domains", policy.HandleGetDomains)
+		r.Get("/sender-rate", policy.HandleGetSenderRate)
+		r.Post("/log-event", policy.HandleLogEvent)
+		r.Get("/suppression-check", policy.HandleSuppressionCheck)
+	})
+
 	return r
 }
 

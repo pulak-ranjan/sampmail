@@ -143,6 +143,18 @@ fi
 systemctl reload postgresql-15 2>/dev/null || systemctl reload postgresql 2>/dev/null || true
 log_success "PostgreSQL configured (user: ${PG_USER}, database: ${PG_DATABASE})"
 
+# Step 3b: Install Redis (for automation engine scaling)
+log_info "Installing Redis..."
+if ! command -v redis-server &> /dev/null; then
+    $PKG_MGR install -y redis
+    systemctl enable redis
+    systemctl start redis
+    log_success "Redis installed and started"
+else
+    log_info "Redis already installed"
+    systemctl start redis 2>/dev/null || true
+fi
+
 # Step 4: Install Docker
 log_info "Installing Docker..."
 if ! command -v docker &> /dev/null; then
@@ -299,6 +311,9 @@ REACHER_URL=http://127.0.0.1:$REACHER_PORT
 SAMPMAIL_CAMPAIGN_WORKERS=50
 SAMPMAIL_DB_MAX_OPEN_CONNS=100
 SAMPMAIL_DB_MAX_IDLE_CONNS=10
+
+# Redis (for automation engine scaling)
+SAMPMAIL_REDIS_ADDR=127.0.0.1:6379
 EOF
 
 chmod 640 "$CONFIG_FILE"
@@ -376,8 +391,8 @@ log_info "Creating systemd services..."
 cat > /etc/systemd/system/sampmail.service << EOF
 [Unit]
 Description=SampMail Email Marketing Platform
-After=network.target postgresql-15.service docker.service
-Wants=postgresql-15.service
+After=network.target postgresql-15.service docker.service redis.service
+Wants=postgresql-15.service redis.service
 
 [Service]
 Type=simple
@@ -454,7 +469,7 @@ if [[ "$INSTALL_KUMOMTA" == true ]]; then
     KUMOMTA_INSTALLED=false
 
     # Method 1: Official repo using dnf config-manager (same as kumomta-ui)
-    if dnf config-manager --add-repo https://openrepo.kumomta.com/files/kumomta-el9.repo 2>/dev/null; then
+    if dnf config-manager --add-repo https://openrepo.kumomta.com/files/kumomta-rocky.repo 2>/dev/null; then
         if $PKG_MGR install -y kumomta 2>/dev/null; then
             KUMOMTA_INSTALLED=true
             log_success "KumoMTA installed from official repo"

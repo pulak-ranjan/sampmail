@@ -95,15 +95,17 @@ var hardToVerifyDomains = map[string]bool{
 type VerifierOptions struct {
 	SenderEmail string
 	HeloHost    string
-	SourceIPs   []string // List of local IPs to rotate
-	ProxyURLs   []string // List of proxies to rotate
+	SourceIPs   []string // List of local IPs to rotate (WARNING: these should NOT be your sending IPs!)
+	ProxyURLs   []string // List of proxies to rotate (RECOMMENDED for verification)
 
 	// Reacher Configuration (choose one method)
 	ReacherURL     string // HTTP API URL (e.g., "http://localhost:8080")
 	ReacherAPIKey  string // API key for hosted Reacher
 	ReacherBinPath string // Path to check_if_email_exists binary (e.g., "/usr/local/bin/check_if_email_exists")
 
-	UseReacherOnly bool // If true, skip local SMTP checks entirely
+	UseReacherOnly   bool // If true, skip local SMTP checks entirely
+	SkipCatchAllTest bool // If true, skip the catch-all probe (safer for reputation)
+	RequireProxy     bool // If true, only verify via proxy (protects sending IP reputation)
 }
 
 // ReacherRequest is the request body for Reacher HTTP API
@@ -402,36 +404,17 @@ func mapReacherResponse(reacherResp ReacherResponse, res EmailVerificationResult
 }
 
 // verifyWithLocalSMTP performs direct SMTP verification
+// IMPORTANT: For reputation safety, we prefer proxies over source IPs
 func verifyWithLocalSMTP(email string, opts VerifierOptions, res EmailVerificationResult, mxHost string) EmailVerificationResult {
 	res.Source = "local"
 	mxHost = strings.TrimSuffix(mxHost, ".")
 
-	// Prepare list of Dialers (Source IPs + Default + Proxy)
+	// Prepare list of Dialers - PROXIES FIRST (safer for reputation!)
 	dialers := make([]func(network, addr string) (net.Conn, error), 0)
+	usingProxy := make([]bool, 0) // Track which dialers are proxies
 
-	// A. Add Source IPs
-	for _, ip := range opts.SourceIPs {
-		localIP := ip // capture closure
-		dialers = append(dialers, func(network, addr string) (net.Conn, error) {
-			localAddr, err := net.ResolveTCPAddr("tcp", localIP+":0")
-			if err != nil {
-				return nil, err
-			}
-			d := net.Dialer{LocalAddr: localAddr, Timeout: 10 * time.Second}
-			return d.Dial(network, addr)
-		})
-	}
-
-	// B. Add Default Interface
-	if len(dialers) == 0 {
-		dialers = append(dialers, func(network, addr string) (net.Conn, error) {
-			return net.DialTimeout(network, addr, 10*time.Second)
-		})
-	}
-
-	// C. Add Proxies (Rotation)
-	// Iterate through all provided proxy URLs
-	for _, pURL := range opts.ProxyURLs { // Changed from ProxyURL to ProxyURLs
+	// A. Add Proxies FIRST (preferred for reputation protection)
+	for _, pURL := range opts.ProxyURLs {
 		proxyURL := pURL // capture closure
 		dialers = append(dialers, func(network, addr string) (net.Conn, error) {
 			u, err := url.Parse(proxyURL)
@@ -444,13 +427,53 @@ func verifyWithLocalSMTP(email string, opts VerifierOptions, res EmailVerificati
 			}
 			return d.Dial(network, addr)
 		})
+		usingProxy = append(usingProxy, true)
+	}
+
+	// B. If RequireProxy is set and no proxies available, fail safely
+	if opts.RequireProxy && len(opts.ProxyURLs) == 0 {
+		res.Log += "RequireProxy set but no proxies configured. "
+		res.IsReachable = "unknown"
+		res.RiskScore = 50
+		res.Error = "No proxy available for verification"
+		return res
+	}
+
+	// C. Only add Source IPs if RequireProxy is NOT set
+	if !opts.RequireProxy {
+		for _, ip := range opts.SourceIPs {
+			localIP := ip // capture closure
+			dialers = append(dialers, func(network, addr string) (net.Conn, error) {
+				localAddr, err := net.ResolveTCPAddr("tcp", localIP+":0")
+				if err != nil {
+					return nil, err
+				}
+				d := net.Dialer{LocalAddr: localAddr, Timeout: 10 * time.Second}
+				return d.Dial(network, addr)
+			})
+			usingProxy = append(usingProxy, false)
+		}
+
+		// D. Add Default Interface as last resort
+		if len(dialers) == 0 {
+			dialers = append(dialers, func(network, addr string) (net.Conn, error) {
+				return net.DialTimeout(network, addr, 10*time.Second)
+			})
+			usingProxy = append(usingProxy, false)
+		}
 	}
 
 	// Try each dialer
 	for i, dial := range dialers {
 		res.Log += fmt.Sprintf("[Attempt %d] ", i+1)
 
-		result := performSMTPCheck(dial, mxHost, email, opts)
+		// Only do catch-all check via proxy to protect sending IP reputation
+		allowCatchAll := false
+		if i < len(usingProxy) && usingProxy[i] && !opts.SkipCatchAllTest {
+			allowCatchAll = true
+		}
+
+		result := performSMTPCheck(dial, mxHost, email, opts, allowCatchAll)
 
 		res.SMTP.CanConnect = (result.Error == "" || strings.Contains(result.Error, "550") || strings.Contains(result.Error, "RCPT"))
 		res.SMTP.IsCatchAll = result.IsCatchAll
@@ -523,7 +546,7 @@ type smtpCheckResult struct {
 	Error      string
 }
 
-func performSMTPCheck(dial func(network, addr string) (net.Conn, error), host, email string, opts VerifierOptions) smtpCheckResult {
+func performSMTPCheck(dial func(network, addr string) (net.Conn, error), host, email string, opts VerifierOptions, allowCatchAllCheck bool) smtpCheckResult {
 	conn, err := dial("tcp", fmt.Sprintf("%s:25", host))
 	if err != nil {
 		return smtpCheckResult{Error: fmt.Sprintf("Connect error: %v", err)}
@@ -553,14 +576,17 @@ func performSMTPCheck(dial func(network, addr string) (net.Conn, error), host, e
 		return smtpCheckResult{Error: fmt.Sprintf("MAIL FROM error: %v", err)}
 	}
 
-	// Catch-All Check
-	randomLocal := fmt.Sprintf("random-%d", time.Now().UnixNano())
-	domain := strings.Split(email, "@")[1]
-	randomEmail := fmt.Sprintf("%s@%s", randomLocal, domain)
+	// Catch-All Check - ONLY if allowed (via proxy) to protect sending IP reputation
+	// Sending random emails from your marketing IPs is a Directory Harvesting Attack signature!
+	if allowCatchAllCheck {
+		randomLocal := fmt.Sprintf("random-%d", time.Now().UnixNano())
+		domain := strings.Split(email, "@")[1]
+		randomEmail := fmt.Sprintf("%s@%s", randomLocal, domain)
 
-	err = client.Rcpt(randomEmail)
-	if err == nil {
-		return smtpCheckResult{IsCatchAll: true, Error: ""}
+		err = client.Rcpt(randomEmail)
+		if err == nil {
+			return smtpCheckResult{IsCatchAll: true, Error: ""}
+		}
 	}
 
 	// Real Email Check

@@ -817,3 +817,119 @@ def verify_signature(payload, signature, secret):
     ).hexdigest()
     return hmac.compare_digest(f"sha256={expected}", signature)
 ```
+
+---
+
+## Internal Policy API (KumoMTA Integration)
+
+> **Note**: These endpoints are restricted to localhost only. They are designed for KumoMTA Lua scripts to query dynamic policies.
+
+### Get Sending IPs
+
+```http
+GET /api/internal/policy/sending-ips
+```
+
+**Response:**
+```json
+[
+  {
+    "ip_address": "192.168.1.100",
+    "hostname": "mail1.example.com",
+    "warmup_stage": 3,
+    "daily_send_limit": 5000,
+    "today_sent": 1234,
+    "reputation_score": 95.5,
+    "is_active": true
+  }
+]
+```
+
+### Get Domains
+
+```http
+GET /api/internal/policy/domains
+```
+
+**Response:**
+```json
+[
+  {
+    "name": "example.com",
+    "dkim_selector": "default",
+    "warmup_enabled": true,
+    "rate_limit": "500/h",
+    "max_per_hour": 500
+  }
+]
+```
+
+### Get Sender Rate
+
+```http
+GET /api/internal/policy/sender-rate?email=sender@example.com
+```
+
+**Response:**
+```json
+{
+  "email": "sender@example.com",
+  "rate_limit": "100/h",
+  "warmup_day": 5,
+  "max_per_hour": 100,
+  "egress_pool": "example.com__sender",
+  "is_active": true
+}
+```
+
+### Log Delivery Event
+
+```http
+POST /api/internal/policy/log-event
+Content-Type: application/json
+
+{
+  "message_id": "abc123",
+  "recipient": "user@example.com",
+  "sender": "sender@example.com",
+  "domain": "example.com",
+  "event_type": "delivered",
+  "status_code": "250",
+  "diagnostic": "OK",
+  "timestamp": 1704499200
+}
+```
+
+### Check Suppression
+
+```http
+GET /api/internal/policy/suppression-check?email=user@example.com
+```
+
+**Response:**
+```json
+{
+  "email": "user@example.com",
+  "suppressed": true,
+  "reason": "hard_bounce"
+}
+```
+
+---
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SAMPMAIL_SECRET` | (required) | App secret key (min 32 chars) |
+| `SAMPMAIL_LISTEN_ADDR` | `127.0.0.1:9000` | API listen address |
+| `SAMPMAIL_DB_DRIVER` | `sqlite` | Database driver (sqlite, postgres) |
+| `SAMPMAIL_PG_HOST` | `localhost` | PostgreSQL host |
+| `SAMPMAIL_PG_PORT` | `5432` | PostgreSQL port |
+| `SAMPMAIL_PG_USER` | - | PostgreSQL username |
+| `SAMPMAIL_PG_PASSWORD` | - | PostgreSQL password |
+| `SAMPMAIL_PG_DATABASE` | - | PostgreSQL database name |
+| `SAMPMAIL_REDIS_ADDR` | - | Redis address (optional, for scaling) |
+| `SAMPMAIL_KUMO_API_URL` | `http://127.0.0.1:8000` | KumoMTA HTTP API URL |
+| `REACHER_URL` | `http://reacher:8080` | Email verification service URL |
+

@@ -133,6 +133,18 @@ fi
 systemctl reload postgresql
 log_success "PostgreSQL configured (user: ${PG_USER}, database: ${PG_DATABASE})"
 
+# Step 3b: Install Redis (for automation engine scaling)
+log_info "Installing Redis..."
+if ! command -v redis-server &> /dev/null; then
+    apt-get install -y -qq redis-server
+    systemctl enable redis-server
+    systemctl start redis-server
+    log_success "Redis installed and started"
+else
+    log_info "Redis already installed"
+    systemctl start redis-server 2>/dev/null || true
+fi
+
 # Step 4: Install Docker
 log_info "Installing Docker..."
 if ! command -v docker &> /dev/null; then
@@ -286,6 +298,9 @@ REACHER_URL=http://127.0.0.1:$REACHER_PORT
 SAMPMAIL_CAMPAIGN_WORKERS=50
 SAMPMAIL_DB_MAX_OPEN_CONNS=100
 SAMPMAIL_DB_MAX_IDLE_CONNS=10
+
+# Redis (for automation engine scaling)
+SAMPMAIL_REDIS_ADDR=127.0.0.1:6379
 EOF
 
 chmod 640 "$CONFIG_FILE"
@@ -357,8 +372,8 @@ log_info "Creating systemd services..."
 cat > /etc/systemd/system/sampmail.service << EOF
 [Unit]
 Description=SampMail Email Marketing Platform
-After=network.target postgresql.service docker.service
-Wants=postgresql.service
+After=network.target postgresql.service docker.service redis-server.service
+Wants=postgresql.service redis-server.service
 
 [Service]
 Type=simple

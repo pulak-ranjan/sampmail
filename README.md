@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.1.12-blue.svg" alt="Version 0.1.12">
+  <img src="https://img.shields.io/badge/version-0.1.16-blue.svg" alt="Version 0.1.16">
   <img src="https://img.shields.io/badge/license-AGPL--3.0-green.svg" alt="License AGPL-3.0">
   <img src="https://img.shields.io/badge/go-1.21+-00ADD8.svg" alt="Go 1.21+">
   <img src="https://img.shields.io/badge/node-18+-339933.svg" alt="Node 18+">

@@ -319,10 +319,30 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "not authenticated"})
 		return
 	}
+
+	// Fetch user's organizations for multi-tenancy support
+	var memberships []models.OrganizationUser
+	s.Store.DB.Where("admin_id = ?", admin.ID).Find(&memberships)
+
+	orgs := make([]map[string]interface{}, 0)
+	for _, m := range memberships {
+		var org models.Organization
+		if err := s.Store.DB.First(&org, m.OrganizationID).Error; err == nil {
+			orgs = append(orgs, map[string]interface{}{
+				"id":   org.ID,
+				"name": org.Name,
+				"slug": org.Slug,
+				"role": m.Role,
+			})
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"email":   admin.Email,
-		"theme":   admin.Theme,
-		"has_2fa": admin.TwoFactorEnabled,
+		"email":          admin.Email,
+		"theme":          admin.Theme,
+		"has_2fa":        admin.TwoFactorEnabled,
+		"is_super_admin": admin.IsSuperAdmin,
+		"organizations":  orgs,
 	})
 }
 

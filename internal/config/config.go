@@ -66,15 +66,18 @@ type Config struct {
 	RedisPassword string // SAMPMAIL_REDIS_PASSWORD
 	RedisDB       int    // SAMPMAIL_REDIS_DB (default: 0)
 
+	// KumoMTA API settings
+	KumoAPIURL string // SAMPMAIL_KUMO_API_URL (default: http://127.0.0.1:8000)
+
 	// Request settings
-	RequestTimeout   time.Duration // SAMPMAIL_REQUEST_TIMEOUT (default: 30s)
-	MaxRequestBody   int64         // SAMPMAIL_MAX_REQUEST_BODY (default: 10MB)
-	ShutdownTimeout  time.Duration // SAMPMAIL_SHUTDOWN_TIMEOUT (default: 30s)
+	RequestTimeout  time.Duration // SAMPMAIL_REQUEST_TIMEOUT (default: 30s)
+	MaxRequestBody  int64         // SAMPMAIL_MAX_REQUEST_BODY (default: 10MB)
+	ShutdownTimeout time.Duration // SAMPMAIL_SHUTDOWN_TIMEOUT (default: 30s)
 
 	// SMTP Pool settings
-	SMTPMaxConns     int           // SAMPMAIL_SMTP_MAX_CONNS (default: 100)
-	SMTPMinConns     int           // SAMPMAIL_SMTP_MIN_CONNS (default: 5)
-	SMTPConnTimeout  time.Duration // SAMPMAIL_SMTP_CONN_TIMEOUT (default: 10s)
+	SMTPMaxConns    int           // SAMPMAIL_SMTP_MAX_CONNS (default: 100)
+	SMTPMinConns    int           // SAMPMAIL_SMTP_MIN_CONNS (default: 5)
+	SMTPConnTimeout time.Duration // SAMPMAIL_SMTP_CONN_TIMEOUT (default: 10s)
 
 	// Backup settings
 	BackupRetention int // SAMPMAIL_BACKUP_RETENTION (default: 3)
@@ -154,6 +157,9 @@ func Get() *Config {
 			RedisAddr:     os.Getenv("SAMPMAIL_REDIS_ADDR"),
 			RedisPassword: os.Getenv("SAMPMAIL_REDIS_PASSWORD"),
 			RedisDB:       getEnvInt("SAMPMAIL_REDIS_DB", 0),
+
+			// KumoMTA API
+			KumoAPIURL: getEnv("SAMPMAIL_KUMO_API_URL", "http://127.0.0.1:8000"),
 
 			// Request settings
 			RequestTimeout:  getEnvDuration("SAMPMAIL_REQUEST_TIMEOUT", 30*time.Second),

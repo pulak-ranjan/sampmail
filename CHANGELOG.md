@@ -5,6 +5,55 @@ All notable changes to SampMail will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.16] - 2026-01-06
+
+### 🛡️ Security & Scalability Release
+
+This release focuses on critical architectural improvements for production-readiness at scale.
+
+### Added
+
+#### KumoMTA Integration Improvements
+- **HTTP Queue API**: Replaced dangerous filesystem access to `/var/spool/kumomta` with safe HTTP API calls to KumoMTA's `/metrics.json` endpoint.
+- **Policy Bridge API**: New internal API (`/api/internal/policy/*`) for KumoMTA Lua integration:
+  - `GET /api/internal/policy/sending-ips` - Dynamic sending IP policies
+  - `GET /api/internal/policy/domains` - Domain DKIM/rate configs
+  - `GET /api/internal/policy/sender-rate` - Per-sender rate limits
+  - `POST /api/internal/policy/log-event` - Delivery event logging
+  - `GET /api/internal/policy/suppression-check` - Suppression list checks
+- **KumoMTA Client** (`kumo_client.go`): Dedicated HTTP client for safe KumoMTA communication.
+
+#### Automation Engine Scaling
+- **Redis Delayed Queue**: O(log N) scheduling using Redis Sorted Sets instead of SQL polling.
+- **Automatic Fallback**: Gracefully falls back to SQL if Redis unavailable.
+- **Higher Throughput**: Can process 500 delayed actions per tick vs. previous 100.
+
+#### Verification Safety
+- **Proxy-First Verification**: Proxies are now tried before source IPs to protect sending reputation.
+- **Catch-All Protection**: Random probe emails only sent via proxy, never from marketing IPs.
+- **New Options**: `RequireProxy` and `SkipCatchAllTest` for strict reputation protection.
+
+#### Smart Warmup
+- **Performance-Based Advancement**: Warmup now checks KumoMTA log stats before advancing.
+- **Bounce Rate Brake**: Holds at current day if bounce rate > 3%.
+- **Deferral Rate Brake**: Holds at current day if deferral rate > 10%.
+- **Optional Rollback**: Can roll back warmup day on severe issues (> 10% bounce).
+
+#### Infrastructure
+- **Redis Installation**: Added to both Rocky Linux and Ubuntu install scripts.
+- **Redis Service Dependency**: SampMail systemd service now depends on Redis.
+- **New Config Options**: `SAMPMAIL_KUMO_API_URL`, `SAMPMAIL_REDIS_ADDR`.
+
+### Fixed
+- **Auth/Me Endpoint**: Now returns `organizations` array for multi-tenancy support.
+- **Token Key Mismatch**: Fixed `kumoui_token` → `sampmail_token` in `api.js` (v0.1.15).
+
+### Changed
+- Warmup thresholds updated: 3% bounce limit (was 5%), 10% deferral limit.
+- Verification now prioritizes proxy connections over source IPs.
+
+---
+
 ## [0.1.13] - 2026-01-05
 
 ### Added
