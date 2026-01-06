@@ -206,22 +206,6 @@ export function getLogs(service, lines = 100) {
   return apiRequest(`/logs/${service}?lines=${lines}`);
 }
 
-// --- Admin: Tenants ---
-export function adminListTenants() {
-  return apiRequest("/admin/organizations"); // V2
-}
-
-export function adminCreateTenant(tenant) {
-  return apiRequest("/admin/organizations", {
-    method: "POST",
-    body: tenant
-  });
-}
-
-export function adminDeleteTenant(id) {
-  return apiRequest(`/admin/organizations/${id}`, { method: "DELETE" });
-}
-
 // --- Tools & Security ---
 export function sendTestEmail(payload) {
   return apiRequest("/tools/send-test", {
@@ -452,6 +436,27 @@ export function deleteWebhook(id) {
 
 export function testWebhook(id) {
   return apiRequest(`/webhooks/${id}/test`, { method: "POST" });
+}
+
+// --- Admin / Superadmin ---
+export function adminListTenants() {
+  return apiRequest("/v2/admin/organizations");
+}
+
+export function adminCreateTenant(data) {
+  return apiRequest("/v2/admin/organizations", { method: "POST", body: data });
+}
+
+export function adminDeleteTenant(id) {
+  return apiRequest(`/v2/admin/organizations/${id}`, { method: "DELETE" });
+}
+
+export function adminGetTenant(id) {
+  return apiRequest(`/v2/organizations/${id}`);
+}
+
+export function adminUpdateTenant(id, data) {
+  return apiRequest(`/v2/organizations/${id}`, { method: "PUT", body: data });
 }
 
 // --- System Health ---
