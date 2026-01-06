@@ -528,7 +528,7 @@ func GetBuiltInTemplates() []BuiltInTemplate {
 func GetBuiltInTemplateContent(templateID string) (*GenerateTemplateResponse, error) {
 	templates := map[string]*GenerateTemplateResponse{
 		"welcome-modern": {
-			Subject:     "Welcome to {{company_name}}, {{first_name}}! 🎉",
+			Subject:     "Welcome to {{company_name}}, {{first_name}}!",
 			PreviewText: "We're excited to have you on board",
 			HTMLContent: WelcomeModernHTML,
 			Variables:   []string{"first_name", "company_name", "unsubscribe_url"},
@@ -546,7 +546,7 @@ func GetBuiltInTemplateContent(templateID string) (*GenerateTemplateResponse, er
 			Variables:   []string{"first_name", "company_name", "current_month"},
 		},
 		"promo-sale": {
-			Subject:     "🔥 {{first_name}}, Don't Miss Our Sale!",
+			Subject:     "{{first_name}}, Don't Miss Our Sale!",
 			PreviewText: "Up to 50% off",
 			HTMLContent: PromoSaleHTML,
 			Variables:   []string{"first_name"},
@@ -580,7 +580,7 @@ const WelcomeModernHTML = `<!DOCTYPE html>
         <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;">
           <tr>
             <td style="background-color:#4F46E5;padding:40px 30px;text-align:center;">
-              <h1 style="margin:0;color:#ffffff;font-size:28px;">Welcome to {{company_name}}! 🎉</h1>
+              <h1 style="margin:0;color:#ffffff;font-size:28px;">Welcome to {{company_name}}!</h1>
             </td>
           </tr>
           <tr>
@@ -621,7 +621,7 @@ const WelcomeSaaSHTML = `<!DOCTYPE html>
         <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;">
           <tr>
             <td style="padding:40px 30px;">
-              <h1 style="margin:0 0 20px;font-size:24px;color:#111827;">Welcome aboard, {{first_name}}! 👋</h1>
+              <h1 style="margin:0 0 20px;font-size:24px;color:#111827;">Welcome aboard, {{first_name}}!</h1>
               <p style="font-size:16px;line-height:1.6;color:#374151;">
                 Your account is all set up. Here's how to get started.
               </p>
@@ -692,7 +692,7 @@ const PromoSaleHTML = `<!DOCTYPE html>
   <table width="100%" cellpadding="0" cellspacing="0">
     <tr>
       <td style="background-color:#DC2626;padding:15px;text-align:center;">
-        <p style="margin:0;color:#ffffff;font-weight:bold;font-size:14px;">⚡ LIMITED TIME OFFER ⚡</p>
+        <p style="margin:0;color:#ffffff;font-weight:bold;font-size:14px;">LIMITED TIME OFFER</p>
       </td>
     </tr>
     <tr>
@@ -733,7 +733,7 @@ const TransactReceiptHTML = `<!DOCTYPE html>
         <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;">
           <tr>
             <td style="padding:30px;text-align:center;">
-              <p style="margin:0;color:#22C55E;font-size:12px;">✓ ORDER CONFIRMED</p>
+              <p style="margin:0;color:#22C55E;font-size:12px;">ORDER CONFIRMED</p>
               <h1 style="margin:10px 0;font-size:24px;">Thank you for your order!</h1>
               <p style="margin:0;color:#666666;">Order #{{order_id}}</p>
             </td>
@@ -755,4 +755,3 @@ const TransactReceiptHTML = `<!DOCTYPE html>
   </table>
 </body>
 </html>`
-

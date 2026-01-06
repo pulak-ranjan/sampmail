@@ -24,76 +24,70 @@ const (
 )
 
 func main() {
-	// 1. Safety Check: Verify KumoMTA config exists
+	// Safety check: verify KumoMTA config exists
 	if _, err := os.Stat(SourcesPath); os.IsNotExist(err) {
-		fmt.Printf("⚠️  KumoMTA configuration not found at %s\n", SourcesPath)
-		fmt.Println("   Skipping migration (Run this only on a server with KumoMTA installed)")
+		fmt.Printf("Warning: KumoMTA configuration not found at %s\n", SourcesPath)
+		fmt.Println("Skipping migration (run this only on a server with KumoMTA installed)")
 		return
 	}
 
-	// 2. Open Database
-	fmt.Printf("📂 Opening DB at %s...\n", DBPath)
+	// Open database
+	fmt.Printf("Opening database at %s...\n", DBPath)
 	st, err := store.NewStore(DBPath)
 	if err != nil {
-		log.Fatalf("❌ Failed to open DB: %v", err)
+		log.Fatalf("Failed to open database: %v", err)
 	}
 
-	// 3. Parse Global Settings (init.lua)
+	// Parse global settings from init.lua
 	parseInitLua(st)
 
-	// 4. Parse Domains, Senders & IPs (sources.toml)
+	// Parse domains, senders and IPs from sources.toml
 	parseSourcesToml(st)
 
-	fmt.Println("\n✅ Migration complete! Configuration and IPs have been imported.")
+	fmt.Println("\nMigration complete. Configuration and IPs have been imported.")
 
-	// 5. Safe Restart (Preserves Queue, Applies New Config)
+	// Safe restart (preserves queue, applies new config)
 	resetKumoMTA()
 }
 
 func resetKumoMTA() {
-	fmt.Println("\n🔄 Restarting KumoMTA to apply new configuration...")
-	fmt.Println("   (This preserves the mail queue and retries delivery with new settings)")
+	fmt.Println("\nRestarting KumoMTA to apply new configuration...")
+	fmt.Println("(This preserves the mail queue and retries delivery with new settings)")
 
-	// 1. Restart the service
-	// KumoMTA will reload init.lua and sources.toml upon startup.
-	// Any messages currently in the spool will be preserved.
 	cmd := exec.Command("systemctl", "restart", "kumomta")
 	if out, err := cmd.CombinedOutput(); err != nil {
-		fmt.Printf("   ⚠️ Error restarting service: %v\n   Output: %s\n", err, string(out))
-		fmt.Println("   ❌ Please check logs manually: journalctl -u kumomta -n 50")
+		fmt.Printf("Error restarting service: %v\nOutput: %s\n", err, string(out))
+		fmt.Println("Please check logs manually: journalctl -u kumomta -n 50")
 		return
 	}
 
-	fmt.Println("   ✅ Service restarted successfully.")
+	fmt.Println("Service restarted successfully.")
 
-	// 2. Wait a moment for initialization
 	time.Sleep(2 * time.Second)
 
-	// 3. Verify status
-	fmt.Println("\n📝 Verifying service status...")
+	fmt.Println("\nVerifying service status...")
 	verify := exec.Command("systemctl", "is-active", "kumomta")
 	if out, err := verify.CombinedOutput(); err != nil {
-		fmt.Printf("   Service status: %s\n", strings.TrimSpace(string(out)))
+		fmt.Printf("Service status: %s\n", strings.TrimSpace(string(out)))
 	} else {
-		fmt.Println("   Status: Active")
-		fmt.Println("   Queue processing has resumed with the new configuration.")
+		fmt.Println("Status: Active")
+		fmt.Println("Queue processing has resumed with the new configuration.")
 	}
 }
 
 func parseInitLua(st *store.Store) {
-	fmt.Println("🔍 Reading init.lua for settings...")
+	fmt.Println("Reading init.lua for settings...")
 	file, err := os.Open(InitLuaPath)
 	if err != nil {
-		fmt.Printf("⚠️  Could not read init.lua: %v\n", err)
+		fmt.Printf("Warning: Could not read init.lua: %v\n", err)
 		return
 	}
 	defer file.Close()
 
 	settings := &models.AppSettings{
-		AIProvider: "openai", // Default
+		AIProvider: "openai",
 	}
 
-	// Regex to find config values generic format
 	reHostname := regexp.MustCompile(`hostname\s*=\s*'([^']+)'`)
 	reRelay := regexp.MustCompile(`relay_hosts\s*=\s*\{\s*'([^']+)'`)
 
@@ -101,15 +95,13 @@ func parseInitLua(st *store.Store) {
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		// Capture Hostname
 		if matches := reHostname.FindStringSubmatch(line); len(matches) > 1 {
 			if settings.MainHostname == "" {
 				settings.MainHostname = matches[1]
-				fmt.Printf("   Found Hostname: %s\n", settings.MainHostname)
+				fmt.Printf("Found hostname: %s\n", settings.MainHostname)
 			}
 		}
 
-		// Capture Relay IPs (generic)
 		if matches := reRelay.FindStringSubmatch(line); len(matches) > 1 {
 			if !strings.Contains(settings.MailWizzIP, matches[1]) {
 				if settings.MailWizzIP != "" {
@@ -120,13 +112,11 @@ func parseInitLua(st *store.Store) {
 		}
 	}
 
-	// Auto-detect Main Server IP if not found
 	if settings.MainServerIP == "" {
 		settings.MainServerIP = getOutboundIP()
-		fmt.Printf("   Auto-detected Server IP: %s\n", settings.MainServerIP)
+		fmt.Printf("Auto-detected server IP: %s\n", settings.MainServerIP)
 	}
 
-	// Upsert Settings
 	existing, _ := st.GetSettings()
 	if existing != nil {
 		settings.ID = existing.ID
@@ -135,10 +125,10 @@ func parseInitLua(st *store.Store) {
 }
 
 func parseSourcesToml(st *store.Store) {
-	fmt.Println("🔍 Reading sources.toml for domains & IPs...")
+	fmt.Println("Reading sources.toml for domains and IPs...")
 	file, err := os.Open(SourcesPath)
 	if err != nil {
-		log.Fatalf("❌ Failed to open sources.toml: %v", err)
+		log.Fatalf("Failed to open sources.toml: %v", err)
 	}
 	defer file.Close()
 
@@ -151,31 +141,26 @@ func parseSourcesToml(st *store.Store) {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		// Skip comments
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 
-		// 1. Capture Source IP
 		if matches := reSource.FindStringSubmatch(line); len(matches) > 1 {
 			currentIP = matches[1]
 
-			// FEATURE: Add to IP Inventory automatically
 			if currentIP != "" {
 				sysIP := &models.SystemIP{
 					Value:     currentIP,
 					CreatedAt: time.Now(),
-					Interface: "eth0", // Default, can be edited in UI
+					Interface: "eth0",
 				}
 				st.DB.Clauses(clause.OnConflict{DoNothing: true}).Create(sysIP)
 			}
 		}
 
-		// 2. Capture Identity (EHLO)
 		if matches := reEhlo.FindStringSubmatch(line); len(matches) > 1 {
-			ehlo := matches[1] // e.g. "selector.example.com"
+			ehlo := matches[1]
 
-			// Generic splitting logic: assume generic format "selector.domain.tld"
 			parts := strings.SplitN(ehlo, ".", 2)
 			if len(parts) != 2 {
 				continue
@@ -183,14 +168,11 @@ func parseSourcesToml(st *store.Store) {
 			localPart := parts[0]
 			domainName := parts[1]
 
-			// A. Ensure Domain Exists
 			domain := ensureDomain(st, domainName)
 
-			// B. Create Standard Bounce User (b-localpart)
 			bounceUser := "b-" + localPart
 			ensureBounceAccount(st, bounceUser, domainName)
 
-			// C. Create Sender
 			sender := &models.Sender{
 				DomainID:       domain.ID,
 				LocalPart:      localPart,
@@ -199,7 +181,6 @@ func parseSourcesToml(st *store.Store) {
 				BounceUsername: bounceUser,
 			}
 
-			// Upsert Sender
 			var existing models.Sender
 			if err := st.DB.Where("email = ?", sender.Email).First(&existing).Error; err == nil {
 				existing.IP = currentIP
@@ -211,10 +192,8 @@ func parseSourcesToml(st *store.Store) {
 			}
 		}
 	}
-	fmt.Printf("   Imported %d senders.\n", count)
+	fmt.Printf("Imported %d senders.\n", count)
 }
-
-// Helpers
 
 func ensureDomain(st *store.Store, name string) *models.Domain {
 	d, err := st.GetDomainByName(name)
@@ -244,7 +223,6 @@ func ensureBounceAccount(st *store.Store, user, domain string) {
 	}
 }
 
-// Auto-detect the primary outbound IP of the server
 func getOutboundIP() string {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {

@@ -203,7 +203,7 @@ func (ws *WebhookService) SendAuditLog(action, details, user string) error {
 		msg := DiscordMessage{
 			Username: senderName,
 			Embeds: []DiscordEmbed{{
-				Title:       "🛠️ Audit Log",
+				Title:       "Audit Log",
 				Description: fmt.Sprintf("**%s** performed action: %s", user, action),
 				Color:       10181046, // Purple
 				Fields: []DiscordField{
@@ -219,9 +219,9 @@ func (ws *WebhookService) SendAuditLog(action, details, user string) error {
 			Username:  senderName,
 			IconEmoji: ":hammer_and_wrench:",
 			Attachments: []Attachment{{
-				Color: "#9b59b6",
-				Title: "🛠️ Audit Log",
-				Text:  fmt.Sprintf("*%s* performed action: %s\n> %s", user, action, details),
+				Color:  "#9b59b6",
+				Title:  "Audit Log",
+				Text:   fmt.Sprintf("*%s* performed action: %s\n> %s", user, action, details),
 				Footer: "System Audit",
 				Ts:     time.Now().Unix(),
 			}},
@@ -260,7 +260,7 @@ func (ws *WebhookService) CheckBlacklists(forceReport bool) error {
 		for _, rbl := range rbls {
 			lookup := fmt.Sprintf("%s.%s", reversedIP, rbl)
 			if result, err := net.LookupHost(lookup); err == nil && len(result) > 0 {
-				issues = append(issues, fmt.Sprintf("❌ IP **%s** listed on **%s**", ip, rbl))
+				issues = append(issues, fmt.Sprintf("IP %s listed on %s", ip, rbl))
 			}
 		}
 		checkedCount++
@@ -268,14 +268,14 @@ func (ws *WebhookService) CheckBlacklists(forceReport bool) error {
 
 	// Alert if issues found (Priority: Red)
 	if len(issues) > 0 {
-		return ws.sendAlert("🚫 Blacklist Alert", "The following IPs are blacklisted:", issues, 15158332)
+		return ws.sendAlert("Blacklist Alert", "The following IPs are blacklisted:", issues, 15158332)
 	}
 
 	// If forced report (manual click) and clean (Priority: Green)
 	if forceReport {
-		return ws.sendAlert("✅ Blacklist Report", 
-			fmt.Sprintf("Scanned %d IPs against %d RBLs.", checkedCount, len(rbls)), 
-			[]string{"All systems clean. No blacklistings detected."}, 
+		return ws.sendAlert("Blacklist Report",
+			fmt.Sprintf("Scanned %d IPs against %d RBLs.", checkedCount, len(rbls)),
+			[]string{"All systems clean. No blacklistings detected."},
 			3066993)
 	}
 
@@ -311,7 +311,7 @@ func (ws *WebhookService) RunSecurityAudit() error {
 	}
 
 	if len(risks) > 0 {
-		return ws.sendAlert("🔐 Security Alert", "Security issues detected", risks, 15105570) // Orange
+		return ws.sendAlert("Security Alert", "Security issues detected", risks, 15105570) // Orange
 	}
 	return nil
 }
@@ -322,7 +322,7 @@ func (ws *WebhookService) SendDailySummary(stats map[string][]DayStats) error {
 	if err != nil || settings == nil || !settings.WebhookEnabled || settings.WebhookURL == "" {
 		return nil
 	}
-	
+
 	totalSent := int64(0)
 	totalDelivered := int64(0)
 	totalBounced := int64(0)
@@ -341,20 +341,20 @@ func (ws *WebhookService) SendDailySummary(stats map[string][]DayStats) error {
 		fmt.Sprintf("Bounced: %d", totalBounced),
 	}
 
-	return ws.sendAlert("📊 Daily Summary", "Traffic report for last 24h", summary, 3447003) // Blue
+	return ws.sendAlert("Daily Summary", "Traffic report for last 24h", summary, 3447003) // Blue
 }
 
 // 5. Test Webhook
 func (ws *WebhookService) SendTestWebhook(webhookURL string) error {
 	senderName := ws.getSenderName()
 	isDiscord := strings.Contains(webhookURL, "discord.com")
-	
+
 	var payload []byte
 	if isDiscord {
 		msg := DiscordMessage{
 			Username: senderName,
 			Embeds: []DiscordEmbed{{
-				Title:       "✅ Test Successful",
+				Title:       "Test Successful",
 				Description: "Webhook is working correctly.",
 				Color:       5763719, // Green
 				Footer:      &DiscordFooter{Text: "KumoMTA UI"},
@@ -365,7 +365,7 @@ func (ws *WebhookService) SendTestWebhook(webhookURL string) error {
 	} else {
 		msg := SlackMessage{
 			Username: senderName,
-			Text: "✅ Test Successful! Webhook is working.",
+			Text:     "Test Successful! Webhook is working.",
 		}
 		payload, _ = json.Marshal(msg)
 	}
@@ -379,18 +379,22 @@ func (ws *WebhookService) CheckBounceRates() error {
 	if err != nil {
 		return err
 	}
-	
+
 	settings, err := ws.Store.GetSettings()
 	if err != nil || settings == nil || !settings.WebhookEnabled {
 		return nil
 	}
 
 	var alerts []string
-	
+
 	for domain, days := range stats {
-		if len(days) == 0 { continue }
+		if len(days) == 0 {
+			continue
+		}
 		today := days[len(days)-1]
-		if today.Sent < 10 { continue } // Ignore low volume
+		if today.Sent < 10 {
+			continue
+		} // Ignore low volume
 
 		rate := float64(today.Bounced) / float64(today.Sent) * 100
 		if rate >= settings.BounceAlertPct {
@@ -399,7 +403,7 @@ func (ws *WebhookService) CheckBounceRates() error {
 	}
 
 	if len(alerts) > 0 {
-		return ws.sendAlert("⚠️ High Bounce Rate", "Domains exceeding threshold:", alerts, 15158332)
+		return ws.sendAlert("High Bounce Rate", "Domains exceeding threshold:", alerts, 15158332)
 	}
 	return nil
 }
@@ -414,7 +418,7 @@ func (ws *WebhookService) sendAlert(title, desc string, items []string, color in
 
 	isDiscord := strings.Contains(settings.WebhookURL, "discord.com")
 	senderName := ws.getSenderName()
-	
+
 	itemList := strings.Join(items, "\n• ")
 	if len(items) > 0 {
 		itemList = "• " + itemList
@@ -441,9 +445,9 @@ func (ws *WebhookService) sendAlert(title, desc string, items []string, color in
 			Username:  senderName,
 			IconEmoji: ":warning:",
 			Attachments: []Attachment{{
-				Color: fmt.Sprintf("#%06x", color),
-				Title: title,
-				Text:  fmt.Sprintf("%s\n\n%s", desc, itemList),
+				Color:  fmt.Sprintf("#%06x", color),
+				Title:  title,
+				Text:   fmt.Sprintf("%s\n\n%s", desc, itemList),
 				Footer: "KumoMTA Alert",
 				Ts:     time.Now().Unix(),
 			}},
@@ -456,7 +460,9 @@ func (ws *WebhookService) sendAlert(title, desc string, items []string, color in
 
 func (ws *WebhookService) send(url string, payload []byte, eventType string) error {
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 10 * time.Second}

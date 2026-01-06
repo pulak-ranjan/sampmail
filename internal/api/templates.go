@@ -356,7 +356,7 @@ Unsubscribe: {{unsubscribe_url}}`,
 </head>
 <body>
     <div class="header">
-        <h1>Welcome, {{first_name}}! 🎉</h1>
+        <h1>Welcome, {{first_name}}!</h1>
     </div>
     <div class="content">
         <p>Thanks for joining {{company_name}}!</p>
@@ -444,7 +444,7 @@ Unsubscribe: {{unsubscribe_url}}`,
 </head>
 <body>
     <div class="header">
-        <h1>✓ Order Confirmed</h1>
+        <h1>Order Confirmed</h1>
     </div>
     <div class="content">
         <p>Hi {{first_name}},</p>

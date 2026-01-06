@@ -290,13 +290,13 @@ func (s *Server) runSafeTool(cmdName, args string) string {
 			return "Block Failed: " + err.Error()
 		}
 		log.Info("IP blocked via AI chat", "ip", args)
-		return fmt.Sprintf("✅ IP %s has been blocked.", args)
+		return fmt.Sprintf("IP %s has been blocked.", args)
 
 	case "backup_config":
 		if err := core.BackupConfig(); err != nil {
 			return "Backup Failed: " + err.Error()
 		}
-		return "✅ Configuration backed up successfully."
+		return "Configuration backed up successfully."
 
 	case "config_bind_ip":
 		ip := strings.TrimSpace(args)

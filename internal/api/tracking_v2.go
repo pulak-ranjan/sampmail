@@ -93,7 +93,7 @@ func (h *TrackingHandlerV2) recordOpen(campaignID, recipientID uint) {
 		var recipient models.CampaignRecipient
 		if err := h.Store.DB.First(&recipient, recipientID).Error; err == nil && recipient.ContactID > 0 {
 			h.AtomicOps.IncrementContactOpens(recipient.ContactID)
-			
+
 			// Trigger automation for email opened
 			// core.TriggerAutomation("trigger_email_opened", recipient.ContactID, map[string]interface{}{
 			// 	"campaign_id": campaignID,
@@ -193,7 +193,7 @@ func (h *TrackingHandlerV2) recordClick(campaignID, recipientID uint, url string
 			h.AtomicOps.IncrementContactClicks(recipient.ContactID)
 			// Add lead score for engagement
 			h.AtomicOps.UpdateLeadScore(recipient.ContactID, 5)
-			
+
 			// Trigger automation for link clicked
 			// core.TriggerAutomation("trigger_link_clicked", recipient.ContactID, map[string]interface{}{
 			// 	"campaign_id": campaignID,
@@ -316,7 +316,7 @@ func (h *TrackingHandlerV2) HandleUnsubscribe(w http.ResponseWriter, r *http.Req
 </head>
 <body>
     <div class="container">
-        <h1>✓ Unsubscribed</h1>
+        <h1>Unsubscribed</h1>
         <p>You have been successfully unsubscribed from our mailing list.</p>
         <p>You will no longer receive emails from us.</p>
     </div>

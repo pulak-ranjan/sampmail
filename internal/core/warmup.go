@@ -119,18 +119,18 @@ func ProcessDailyWarmupWithConfig(st *store.Store, cfg WarmupConfig) error {
 
 			// Check if we should Advance, Hold, or Rollback
 			if s.WarmupDay >= len(plan) {
-				log.Printf("[Warmup] ✓ Sender %s completed %s plan. Disabling warmup limits.", s.Email, planName)
+				log.Printf("[Warmup] Sender %s completed %s plan. Disabling warmup limits.", s.Email, planName)
 				s.WarmupEnabled = false // Done! They run unlimited now.
 			} else if !shouldAdvance {
 				// BRAKE ENGAGED: Hold at current day due to poor performance
-				log.Printf("[Warmup] ⚠️ HOLDING %s at Day %d - %s", s.Email, s.WarmupDay, brakeReason)
+				log.Printf("[Warmup] HOLDING %s at Day %d - %s", s.Email, s.WarmupDay, brakeReason)
 
 				// Optional: Rollback for severe issues (bounce rate > 10%)
 				if cfg.RollbackOnError && s.WarmupDay > 1 && yesterdayStats != nil {
 					bounceRate := float64(yesterdayStats.Bounced) / float64(yesterdayStats.Sent) * 100
 					if bounceRate > 10.0 {
 						s.WarmupDay--
-						log.Printf("[Warmup] ⚠️ ROLLED BACK %s to Day %d (severe bounce rate)", s.Email, s.WarmupDay)
+						log.Printf("[Warmup] ROLLED BACK %s to Day %d (severe bounce rate)", s.Email, s.WarmupDay)
 					}
 				}
 
@@ -140,7 +140,7 @@ func ProcessDailyWarmupWithConfig(st *store.Store, cfg WarmupConfig) error {
 				// Performance is good, advance schedule
 				s.WarmupDay++
 				s.WarmupLastUpdate = time.Now()
-				log.Printf("[Warmup] ✓ Bumped %s to Day %d (%s)", s.Email, s.WarmupDay, plan[s.WarmupDay-1])
+				log.Printf("[Warmup] Bumped %s to Day %d (%s)", s.Email, s.WarmupDay, plan[s.WarmupDay-1])
 			}
 
 			// Save progress
