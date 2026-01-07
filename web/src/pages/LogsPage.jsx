@@ -37,7 +37,7 @@ export default function LogsPage() {
     <div className="space-y-6 h-[calc(100vh-140px)] flex flex-col">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-shrink-0">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">System Logs</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">System Logs</h1>
           <p className="text-muted-foreground">View real-time journalctl output.</p>
         </div>
         <button

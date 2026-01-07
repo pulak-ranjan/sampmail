@@ -114,7 +114,7 @@ export default function SecurityPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Security</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Security</h1>
         <p className="text-muted-foreground">Manage your account security and active sessions.</p>
       </div>
 

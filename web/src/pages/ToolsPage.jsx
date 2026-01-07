@@ -11,7 +11,7 @@ export default function ToolsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">System Tools</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">System Tools</h1>
         <p className="text-muted-foreground">Utilities for testing and securing your MTA.</p>
       </div>
 

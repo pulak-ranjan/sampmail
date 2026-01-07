@@ -68,7 +68,7 @@ export default function IPsPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">IP Inventory</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">IP Inventory</h1>
           <p className="text-muted-foreground">Manage server IP addresses for rotation.</p>
         </div>
         <button onClick={load} className="p-2 hover:bg-muted rounded-md transition-colors">

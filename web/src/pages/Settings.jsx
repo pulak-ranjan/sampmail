@@ -56,7 +56,7 @@ export default function Settings() {
   return (
     <div className="max-w-2xl mx-auto space-y-8 py-4">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">System Settings</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">System Settings</h1>
         <p className="text-muted-foreground">Configure global server parameters and integrations.</p>
       </div>
 

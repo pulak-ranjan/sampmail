@@ -75,7 +75,7 @@ export default function DMARCPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">DMARC & DNS</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">DMARC & DNS</h1>
         <p className="text-muted-foreground">Configure policies and verify live DNS records.</p>
       </div>
 

@@ -67,7 +67,7 @@ export default function WarmupPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">IP Warmup</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">IP Warmup</h1>
           <p className="text-muted-foreground">Automated daily rate limiting for new IPs.</p>
         </div>
         <button onClick={load} className="p-2 hover:bg-muted rounded-md border">

@@ -37,7 +37,7 @@ const ListsPage = () => {
         headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
       });
       const data = await res.json();
-      setLists(data);
+      setLists(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Failed to fetch lists:', error);
     } finally {

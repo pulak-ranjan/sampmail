@@ -48,7 +48,7 @@ export default function Dashboard() {
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+          <h2 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h2>
           <p className="text-muted-foreground">Overview of your email infrastructure.</p>
         </div>
         <button
@@ -84,7 +84,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Infrastructure Health */}
         <div className="bg-card border rounded-xl p-6 shadow-sm">
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-foreground">
             <Activity className="w-5 h-5 text-muted-foreground" />
             Service Status
           </h3>
@@ -97,7 +97,7 @@ export default function Dashboard() {
 
         {/* Open Ports */}
         <div className="bg-card border rounded-xl p-6 shadow-sm">
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-foreground">
             <Server className="w-5 h-5 text-muted-foreground" />
             Open Ports
           </h3>
@@ -138,7 +138,7 @@ function ServiceRow({ name, status }) {
   const isActive = status === "active";
   return (
     <div className="flex items-center justify-between p-3 rounded-lg border bg-background/50">
-      <span className="font-medium">{name}</span>
+      <span className="font-medium text-foreground">{name}</span>
       <div className="flex items-center gap-2">
         <span className={cn(
           "text-xs font-medium px-2 py-1 rounded-full capitalize",
