@@ -43,7 +43,12 @@ Include the token in all subsequent requests:
 Authorization: Bearer <token>
 ```
 
-### Register (First User Only)
+### Register (Deprecated in v0.2.0+)
+
+> **Note:** Public registration is disabled in v0.2.0+. Super Admins create users via CLI:
+> ```bash
+> ./sampmail user create email@example.com "password" --role super_admin
+> ```
 
 ```http
 POST /api/auth/register

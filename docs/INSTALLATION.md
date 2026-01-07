@@ -101,9 +101,28 @@ docker-compose ps
 docker-compose logs -f sampmail
 ```
 
-### 4. Access UI
+### 4. Create Super Admin Account
 
-Open http://localhost:9000 and register your admin account.
+> **Note (v0.2.0+):** Public registration is disabled. Create your admin account via CLI:
+
+```bash
+# Docker installation
+docker exec sampmail ./sampmail user create admin@example.com "YourPassword123" --role super_admin
+
+# Binary installation
+cd /opt/sampmail
+./sampmail user create admin@example.com "YourPassword123" --role super_admin
+```
+
+### 5. Access UI
+
+Open http://localhost:9000 and login with your admin account.
+
+**First Steps:**
+1. Login as Super Admin
+2. Go to **Admin Station > Organizations**
+3. Create your first organization
+4. Use the **Org Switcher** in sidebar to enter User Dashboard
 
 ### What Gets Started
 

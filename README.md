@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.1.18-blue.svg" alt="Version 0.1.18">
+  <img src="https://img.shields.io/badge/version-0.2.0-blue.svg" alt="Version 0.2.0">
   <img src="https://img.shields.io/badge/license-AGPL--3.0-green.svg" alt="License AGPL-3.0">
   <img src="https://img.shields.io/badge/go-1.21+-00ADD8.svg" alt="Go 1.21+">
   <img src="https://img.shields.io/badge/node-18+-339933.svg" alt="Node 18+">
@@ -95,12 +95,16 @@ SampMail is a powerful, self-hosted email marketing platform designed for busine
 - Health monitoring
 - **Proxy Rotation Manager** (SOCKS5/HTTP support)
 
-### 🆕 V2 Features
-- Multi-tenant organizations
+### 🆕 V2 Features (0.2.0)
+- **Admin Dashboard** - System-wide health, services, security management
+- **User Dashboard** - Org-scoped campaign stats, performance, activity
+- **Service Manager** - One-click install/start/stop for KumoMTA, Dovecot, Reacher
+- Multi-tenant organizations with isolation
+- Organization Switcher in sidebar
 - **AI-powered Agent** (OpenAI, DeepSeek, Google Gemini)
 - Advanced personalization engine
-- Subscriber list management
 - Enhanced API with pagination
+- Disabled public registration (admin-only user creation)
 
 ---
 

@@ -7,16 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.2.0] - 2026-01-07
+
+### 🎉 Major Release: Multi-Tenancy & Admin Dashboard
+
+This release introduces a complete separation between Admin and User roles, with dedicated dashboards for each.
+
 ### Added
-- Template library with built-in email templates
-- Tags and segments for subscriber management
-- Enhanced analytics dashboard with deliverability scoring
+
+**Multi-Tenancy System**
+- Organization (Tenant) management for Super Admins
+- Organization switcher in sidebar
+- Org-scoped data isolation for campaigns, lists, subscribers
+
+**Admin Dashboard**
+- System-wide health monitoring (CPU, RAM)
+- Service status display (KumoMTA, Dovecot, Fail2Ban)
+- Open ports visualization
+- Quick access links to admin tools
+
+**User Dashboard**
+- Campaign performance stats (sent, opens, clicks)
+- Performance overview with trend indicators
+- Recent activity feed
+- Quick links to marketing features
+
+**Service Manager**
+- One-click install/start/stop/restart for KumoMTA, Dovecot, Reacher
+- Real-time service status monitoring
+- Service descriptions and documentation
+
+**Navigation Overhaul**
+- Split sidebar into "Admin Station" and "Org Workspace"
+- Category headers for better organization
+- Context-aware navigation based on role/org selection
 
 ### Changed
-- Improved CSV import performance with batch inserts
+
+- Disabled public registration (Admins create users only)
+- Smart Dashboard routing based on user role and org context
+- Enhanced UI consistency across all pages
 
 ### Fixed
-- Rate limiting now correctly identifies client IP behind proxies
+
+- `e.map is not a function` crash on Templates/Lists pages
+- Light mode visibility issues (headers, text contrast)
+- All emojis replaced with professional Lucide icons
+- API error handling with Array.isArray() checks
+- SSLPage missing Check import
+
+### Security
+
+- Public registration disabled by default
+- Super Admin required to create organizations
+- Organization-scoped API routes
 
 ---
 
@@ -89,6 +135,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Notes |
 |---------|--------------|-------|
+| 0.2.0 | 2026-01-07 | Multi-tenancy, Admin/User Dashboards |
 | 0.1.12 | 2025-12-29 | Initial release |
 
 ---
