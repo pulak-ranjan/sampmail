@@ -5,8 +5,7 @@ import { Mail, Lock, Key, ArrowRight, Loader2, ShieldCheck, UserPlus, LogIn, Che
 import { cn } from "../lib/utils";
 
 export default function LoginRegister() {
-  const { login, verify2FA, register, user } = useAuth();
-  const [mode, setMode] = useState("login"); // login vs register
+  const { login, verify2FA, user } = useAuth();
   const [step, setStep] = useState(1); // 1 = creds, 2 = 2fa
 
   const [email, setEmail] = useState("");
@@ -33,25 +32,18 @@ export default function LoginRegister() {
     setBusy(true);
 
     try {
-      if (mode === "register") {
-        await register(email, password);
-        setSuccessMsg("Account created successfully! Please login.");
-        setMode("login"); // Auto-switch to login
-        setPassword(""); // Clear password for security
-      } else {
-        if (step === 1) {
-          const res = await login(email, password);
-          if (res && res.requires_2fa) {
-            setTempToken(res.temp_token);
-            setStep(2);
-            setError("");
-          } else {
-            navigate("/");
-          }
+      if (step === 1) {
+        const res = await login(email, password);
+        if (res && res.requires_2fa) {
+          setTempToken(res.temp_token);
+          setStep(2);
+          setError("");
         } else {
-          await verify2FA(tempToken, totp);
           navigate("/");
         }
+      } else {
+        await verify2FA(tempToken, totp);
+        navigate("/");
       }
     } catch (err) {
       setError(err.message || "Authentication failed");
@@ -80,14 +72,12 @@ export default function LoginRegister() {
             {step === 2 ? <ShieldCheck className="w-8 h-8" /> : <Lock className="w-8 h-8" />}
           </div>
           <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
-            {step === 2 ? "Two-Factor Auth" : mode === "login" ? "Welcome Back" : "Get Started"}
+            {step === 2 ? "Two-Factor Auth" : "Welcome Back"}
           </h1>
           <p className="text-sm text-slate-400">
             {step === 2
               ? "Check your authenticator app"
-              : mode === "login"
-                ? "Enter your credentials to access the console"
-                : "Create your admin account to begin"}
+              : "Enter your credentials to access the console"}
           </p>
         </div>
 
@@ -166,21 +156,6 @@ export default function LoginRegister() {
         </form>
 
         {/* Footer / Toggle */}
-        {step === 1 && (
-          <div className="mt-8 text-center">
-            <p className="text-sm text-slate-400">
-              {mode === "login" ? "Don't have an account yet?" : "Already have an account?"}
-              <button
-                type="button"
-                onClick={toggleMode}
-                className="ml-2 font-medium text-blue-400 hover:text-blue-300 transition-colors focus:outline-none hover:underline"
-              >
-                {mode === "login" ? "Register now" : "Log in"}
-              </button>
-            </p>
-          </div>
-        )}
-
         {step === 2 && (
           <div className="mt-6 text-center">
             <button

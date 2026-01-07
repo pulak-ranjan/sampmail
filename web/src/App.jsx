@@ -35,6 +35,8 @@ import ProxiesPage from './pages/ProxiesPage';
 import SendingIPsPage from './pages/SendingIPsPage';
 import SSLPage from './pages/SSLPage';
 import ServiceManagerPage from './pages/ServiceManagerPage';
+import AdminDashboard from './pages/AdminDashboard';
+import UserDashboard from './pages/UserDashboard';
 
 import TenantsPage from './pages/admin/TenantsPage';
 
@@ -53,6 +55,20 @@ function SuperAdminRoute({ children }) {
   return <Layout>{children}</Layout>;
 }
 
+// Smart Dashboard: Shows AdminDashboard for super_admin, UserDashboard for regular users
+function SmartDashboard() {
+  const { user } = useAuth();
+  const orgId = localStorage.getItem('sampmail_org_id');
+
+  // Super admin without org selected -> Admin Dashboard
+  if (user?.is_super_admin && !orgId) {
+    return <AdminDashboard />;
+  }
+
+  // User with org selected -> User Dashboard
+  return <UserDashboard />;
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -63,9 +79,10 @@ export default function App() {
 
             {/* Superadmin Routes */}
             <Route path="/admin/tenants" element={<SuperAdminRoute><TenantsPage /></SuperAdminRoute>} />
+            <Route path="/admin" element={<SuperAdminRoute><AdminDashboard /></SuperAdminRoute>} />
 
             {/* App Routes */}
-            <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/" element={<ProtectedRoute><SmartDashboard /></ProtectedRoute>} />
             <Route path="/campaigns" element={<ProtectedRoute><CampaignsPage /></ProtectedRoute>} />
             <Route path="/automations" element={<ProtectedRoute><AutomationsPage /></ProtectedRoute>} />
             <Route path="/templates" element={<ProtectedRoute><TemplatesPage /></ProtectedRoute>} />

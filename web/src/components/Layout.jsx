@@ -18,36 +18,49 @@ export default function Layout({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const links = [
+  const orgId = localStorage.getItem('sampmail_org_id');
+
+  const adminLinks = [
+    { path: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
+    { path: '/admin/tenants', icon: Building, label: 'Organizations' },
+    { path: '/services', icon: Server, label: 'Services' },
+    { path: '/network', label: 'Network & IPs', isHeader: true },
+    { path: '/sending-ips', icon: Radio, label: 'Sending IPs' },
+    { path: '/ips', icon: Network, label: 'IP Inventory' },
+    { path: '/proxies', icon: ServerCog, label: 'Proxies' },
+    { path: '/warmup', icon: Thermometer, label: 'IP Warmup' },
+    { path: '/system', label: 'System', isHeader: true },
+    { path: '/queue', icon: ListOrdered, label: 'Queue' },
+    { path: '/logs', icon: FileText, label: 'System Logs' },
+    { path: '/security', icon: Lock, label: 'Security' },
+    { path: '/ssl', icon: ShieldAlert, label: 'SSL / HTTPS' },
+    { path: '/tools', icon: Wrench, label: 'System Tools' },
+    { path: '/config', icon: ServerCog, label: 'Config Gen' },
+    { path: '/settings', icon: Settings, label: 'Settings' },
+  ];
+
+  const userLinks = [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
+    { path: '/marketing', label: 'Marketing', isHeader: true },
     { path: '/campaigns', icon: Send, label: 'Campaigns' },
     { path: '/automations', icon: Zap, label: 'Automations' },
     { path: '/templates', icon: Mail, label: 'Templates' },
+    { path: '/audience', label: 'Audience', isHeader: true },
     { path: '/lists', icon: List, label: 'Lists' },
     { path: '/subscribers', icon: Users, label: 'Subscribers' },
     { path: '/tags', icon: Tag, label: 'Tags' },
     { path: '/segments', icon: Filter, label: 'Segments' },
     { path: '/suppressions', icon: Ban, label: 'Suppressions' },
+    { path: '/reports', label: 'Reports', isHeader: true },
     { path: '/stats', icon: BarChart3, label: 'Statistics' },
     { path: '/analytics', icon: PieChart, label: 'Analytics' },
+    { path: '/configuration', label: 'Configuration', isHeader: true },
     { path: '/domains', icon: Globe, label: 'Domains' },
-    { path: '/warmup', icon: Thermometer, label: 'IP Warmup' },
-    { path: '/sending-ips', icon: Radio, label: 'Sending IPs' },
-    { path: '/ips', icon: Network, label: 'IP Inventory' },
-    { path: '/proxies', icon: ServerCog, label: 'Proxies' },
     { path: '/apikeys', icon: Key, label: 'API Keys' },
+    { path: '/webhooks', icon: Webhook, label: 'Webhooks' },
     { path: '/dmarc', icon: ShieldCheck, label: 'DMARC' },
     { path: '/dkim', icon: Key, label: 'DKIM' },
     { path: '/bounce', icon: MailWarning, label: 'Bounce' },
-    { path: '/queue', icon: ListOrdered, label: 'Queue' },
-    { path: '/webhooks', icon: Webhook, label: 'Webhooks' },
-    { path: '/tools', icon: Wrench, label: 'System Tools' },
-    { path: '/services', icon: Server, label: 'Services' },
-    { path: '/config', icon: ServerCog, label: 'Config Gen' },
-    { path: '/logs', icon: FileText, label: 'System Logs' },
-    { path: '/security', icon: Lock, label: 'Security' },
-    { path: '/ssl', icon: ShieldAlert, label: 'SSL / HTTPS' },
-    { path: '/settings', icon: Settings, label: 'Settings' },
   ];
 
   const handleLogout = () => {
@@ -56,6 +69,14 @@ export default function Layout({ children }) {
   };
 
   const NavItem = ({ link, onClick }) => {
+    if (link.isHeader) {
+      return (
+        <div className="px-3 pt-4 pb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          {link.label}
+        </div>
+      );
+    }
+
     const isActive = location.pathname === link.path;
     const Icon = link.icon;
     return (
@@ -104,18 +125,30 @@ export default function Layout({ children }) {
         </div>
 
         <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-          {links.map((link) => (
-            <NavItem key={link.path} link={link} onClick={() => setIsMobileOpen(false)} />
-          ))}
-
-          {/* Superadmin Section */}
           {user?.is_super_admin && (
-            <div className="pt-4 mt-4 border-t border-border">
-              <div className="px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                Superadmin
+            <>
+              <div className="px-3 pb-2 text-xs font-semibold text-primary uppercase tracking-wider">
+                Admin Station
               </div>
-              <NavItem link={{ path: '/admin/tenants', icon: Building, label: 'Manage Tenants' }} onClick={() => setIsMobileOpen(false)} />
-            </div>
+              {adminLinks.map((link, i) => (
+                <NavItem key={link.path || i} link={link} onClick={() => setIsMobileOpen(false)} />
+              ))}
+              <div className="my-4 border-t border-border" />
+            </>
+          )}
+
+          {/* Show User Links only if Org is selected OR user is not superadmin (regular user) */}
+          {(orgId || !user?.is_super_admin) && (
+            <>
+              {user?.is_super_admin && (
+                <div className="px-3 pb-2 text-xs font-semibold text-primary uppercase tracking-wider">
+                  Org Workspace
+                </div>
+              )}
+              {userLinks.map((link, i) => (
+                <NavItem key={link.path || i} link={link} onClick={() => setIsMobileOpen(false)} />
+              ))}
+            </>
           )}
         </nav>
 
