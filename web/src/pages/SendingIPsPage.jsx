@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getAuthHeaders } from '../api';
 
 const SendingIPsPage = () => {
     const [ips, setIps] = useState([]);
@@ -12,7 +13,7 @@ const SendingIPsPage = () => {
     const fetchIPs = async () => {
         try {
             const res = await fetch('/api/sending-ips', {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                headers: getAuthHeaders(),
             });
             const data = await res.json();
             setIps(data || []);
@@ -27,10 +28,7 @@ const SendingIPsPage = () => {
         try {
             await fetch('/api/sending-ips', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                },
+                headers: getAuthHeaders(),
                 body: JSON.stringify(data),
             });
             setShowCreate(false);
@@ -45,7 +43,7 @@ const SendingIPsPage = () => {
         try {
             await fetch(`/api/sending-ips/${id}`, {
                 method: 'DELETE',
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                headers: getAuthHeaders(),
             });
             fetchIPs();
         } catch (error) {

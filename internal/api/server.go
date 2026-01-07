@@ -216,6 +216,22 @@ func (s *Server) routes() chi.Router {
 		r.Post("/api/updates/rollback", s.handleRollback)
 		r.Get("/api/updates/changelog", s.handleUpdateChangelog)
 
+		// Service Manager - One-click install and control
+		serviceManager := NewServiceHandler()
+		r.Get("/api/services/status", serviceManager.HandleGetStatus)
+		r.Post("/api/services/kumomta/install", serviceManager.HandleInstall)
+		r.Post("/api/services/kumomta/start", serviceManager.HandleStart)
+		r.Post("/api/services/kumomta/stop", serviceManager.HandleStop)
+		r.Post("/api/services/kumomta/restart", serviceManager.HandleRestart)
+		r.Post("/api/services/dovecot/install", serviceManager.HandleInstall)
+		r.Post("/api/services/dovecot/start", serviceManager.HandleStart)
+		r.Post("/api/services/dovecot/stop", serviceManager.HandleStop)
+		r.Post("/api/services/dovecot/restart", serviceManager.HandleRestart)
+		r.Post("/api/services/reacher/install", serviceManager.HandleInstall)
+		r.Post("/api/services/reacher/start", serviceManager.HandleStart)
+		r.Post("/api/services/reacher/stop", serviceManager.HandleStop)
+		r.Post("/api/services/reacher/restart", serviceManager.HandleRestart)
+
 		// Bulk Import (rate limited to prevent abuse)
 		r.With(custom.ImportLimiter.Limit).Post("/api/import/csv", s.handleCSVImport)            // Sync (limited to 1MB)
 		r.With(custom.ImportLimiter.Limit).Post("/api/import/csv/async", s.handleCSVImportAsync) // Async (up to 50MB)

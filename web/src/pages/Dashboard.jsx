@@ -124,7 +124,7 @@ function StatCard({ label, value, icon: Icon, color }) {
       <div className="flex justify-between items-start">
         <div>
           <p className="text-sm font-medium text-muted-foreground">{label}</p>
-          <h4 className="text-2xl font-bold mt-2">{value}</h4>
+          <h4 className="text-2xl font-bold mt-2 text-foreground">{value}</h4>
         </div>
         <div className={cn("p-2 rounded-lg bg-secondary", color)}>
           <Icon className="w-5 h-5" />

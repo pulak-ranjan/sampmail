@@ -12,7 +12,7 @@ const SegmentsPage = () => {
     const fetchSegments = async () => {
         try {
             const res = await fetch('/api/segments', {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
             });
             const data = await res.json();
             setSegments(data || []);
@@ -29,7 +29,7 @@ const SegmentsPage = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
+                    Authorization: `Bearer ${localStorage.getItem('sampmail_token')}`,
                 },
                 body: JSON.stringify(data),
             });
@@ -45,7 +45,7 @@ const SegmentsPage = () => {
         try {
             await fetch(`/api/segments/${id}`, {
                 method: 'DELETE',
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
             });
             fetchSegments();
         } catch (error) {
@@ -57,7 +57,7 @@ const SegmentsPage = () => {
         try {
             await fetch(`/api/segments/${id}/refresh`, {
                 method: 'POST',
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
             });
             fetchSegments();
         } catch (error) {

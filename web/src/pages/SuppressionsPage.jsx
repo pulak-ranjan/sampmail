@@ -18,7 +18,7 @@ const SuppressionsPage = () => {
             if (search) params.append('search', search);
 
             const res = await fetch(`/api/suppressions?${params}`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
             });
             const data = await res.json();
             setSuppressions(data.data || []);
@@ -36,7 +36,7 @@ const SuppressionsPage = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
+                    Authorization: `Bearer ${localStorage.getItem('sampmail_token')}`,
                 },
                 body: JSON.stringify({ email, reason }),
             });
@@ -52,7 +52,7 @@ const SuppressionsPage = () => {
         try {
             await fetch(`/api/suppressions/${id}`, {
                 method: 'DELETE',
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
             });
             fetchSuppressions();
         } catch (error) {

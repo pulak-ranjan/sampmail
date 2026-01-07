@@ -17,7 +17,7 @@ const ProxiesPage = () => {
     const fetchProxies = async () => {
         try {
             const res = await fetch('/api/proxies', {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
             });
             const data = await res.json();
             setProxies(data || []);
@@ -34,7 +34,7 @@ const ProxiesPage = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
+                    Authorization: `Bearer ${localStorage.getItem('sampmail_token')}`,
                 },
                 body: JSON.stringify(data),
             });
@@ -50,7 +50,7 @@ const ProxiesPage = () => {
         try {
             await fetch(`/api/proxies/${deleteId}`, {
                 method: 'DELETE',
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
             });
             fetchProxies();
         } catch (error) {
@@ -65,7 +65,7 @@ const ProxiesPage = () => {
         try {
             const res = await fetch(`/api/proxies/${id}/test`, {
                 method: 'POST',
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
             });
             const data = await res.json();
             setTestResults(prev => ({

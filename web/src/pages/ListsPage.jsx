@@ -4,6 +4,7 @@ import {
   FileText, CheckCircle, XCircle, AlertTriangle, UserPlus
 } from 'lucide-react';
 import ConfirmationModal from '../components/ConfirmationModal';
+import { getAuthHeaders } from '../api';
 
 const ListsPage = () => {
   const [lists, setLists] = useState([]);
@@ -33,7 +34,7 @@ const ListsPage = () => {
   const fetchLists = async () => {
     try {
       const res = await fetch('/api/v2/lists', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
       });
       const data = await res.json();
       setLists(data);
@@ -56,7 +57,7 @@ const ListsPage = () => {
       });
 
       const res = await fetch(`/api/v2/lists/${selectedList.id}/subscribers?${params}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
       });
       const data = await res.json();
       setSubscribers(data.data || []);
@@ -76,7 +77,7 @@ const ListsPage = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${localStorage.getItem('sampmail_token')}`,
         },
         body: JSON.stringify(listData),
       });
@@ -95,7 +96,7 @@ const ListsPage = () => {
     try {
       await fetch(`/api/v2/lists/${listId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
       });
       setLists(lists.filter(l => l.id !== listId));
       if (selectedList?.id === listId) {
@@ -113,7 +114,7 @@ const ListsPage = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${localStorage.getItem('sampmail_token')}`,
         },
         body: JSON.stringify(subscriberData),
       });
@@ -132,7 +133,7 @@ const ListsPage = () => {
     try {
       await fetch(`/api/v2/lists/${selectedList.id}/subscribers/${contactId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
       });
       fetchSubscribers();
       fetchLists();
@@ -146,7 +147,7 @@ const ListsPage = () => {
     try {
       await fetch(`/api/v2/lists/${selectedList.id}/subscribers/${contactId}/unsubscribe`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
       });
       fetchSubscribers();
       fetchLists();
@@ -635,7 +636,7 @@ const ImportModal = ({ listId, onClose, onComplete }) => {
 
       const res = await fetch(`/api/v2/lists/${listId}/import`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
         body: formData,
       });
       const data = await res.json();
@@ -715,3 +716,4 @@ const ImportModal = ({ listId, onClose, onComplete }) => {
 };
 
 export default ListsPage;
+

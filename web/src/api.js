@@ -1,7 +1,18 @@
 const API_BASE = "/api";
 
 function getToken() {
-  return localStorage.getItem("sampmail_token") || ""; // Fixed key
+  return localStorage.getItem("sampmail_token") || "";
+}
+
+// Helper for pages that make direct fetch calls - includes both token and org ID
+export function getAuthHeaders() {
+  const headers = {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${getToken()}`
+  };
+  const orgId = localStorage.getItem("sampmail_org_id");
+  if (orgId) headers["X-Organization-ID"] = orgId;
+  return headers;
 }
 
 export async function apiRequest(path, options = {}) {

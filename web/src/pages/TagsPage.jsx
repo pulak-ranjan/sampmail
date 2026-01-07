@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Tag } from 'lucide-react';
 
 const TagsPage = () => {
     const [tags, setTags] = useState([]);
@@ -13,7 +14,7 @@ const TagsPage = () => {
     const fetchTags = async () => {
         try {
             const res = await fetch('/api/tags', {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
             });
             const data = await res.json();
             setTags(data || []);
@@ -30,7 +31,7 @@ const TagsPage = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
+                    Authorization: `Bearer ${localStorage.getItem('sampmail_token')}`,
                 },
                 body: JSON.stringify(data),
             });
@@ -47,7 +48,7 @@ const TagsPage = () => {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
+                    Authorization: `Bearer ${localStorage.getItem('sampmail_token')}`,
                 },
                 body: JSON.stringify(data),
             });
@@ -63,7 +64,7 @@ const TagsPage = () => {
         try {
             await fetch(`/api/tags/${id}`, {
                 method: 'DELETE',
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
             });
             fetchTags();
         } catch (error) {
@@ -96,7 +97,7 @@ const TagsPage = () => {
 
             {tags.length === 0 ? (
                 <div className="bg-white dark:bg-gray-800 rounded-xl p-12 text-center">
-                    <div className="text-6xl mb-4">🏷️</div>
+                    <div className="flex justify-center mb-4"><Tag className="w-16 h-16 text-gray-400" /></div>
                     <h3 className="text-xl font-semibold mb-2 dark:text-white">No tags yet</h3>
                     <p className="text-gray-500 mb-4">Create tags to organize your contacts</p>
                     <button
@@ -204,3 +205,4 @@ const TagModal = ({ tag, onClose, onSave }) => {
 };
 
 export default TagsPage;
+

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import AutomationBuilder from '../components/AutomationBuilder';
+import { getAuthHeaders } from '../api';
 
 const AutomationsPage = () => {
     const [automations, setAutomations] = useState([]);
@@ -15,7 +16,7 @@ const AutomationsPage = () => {
     const fetchAutomations = async () => {
         try {
             const res = await fetch('/api/v2/automations', {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
             });
             const data = await res.json();
             setAutomations(data || []);
@@ -32,7 +33,7 @@ const AutomationsPage = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
+                    Authorization: `Bearer ${localStorage.getItem('sampmail_token')}`,
                 },
                 body: JSON.stringify(data),
             });
@@ -52,7 +53,7 @@ const AutomationsPage = () => {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
+                    Authorization: `Bearer ${localStorage.getItem('sampmail_token')}`,
                 },
                 body: JSON.stringify({ ...selectedAutomation, ...data }),
             });
@@ -66,7 +67,7 @@ const AutomationsPage = () => {
         try {
             await fetch(`/api/v2/automations/${id}/${active ? 'activate' : 'pause'}`, {
                 method: 'POST',
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
             });
             fetchAutomations();
         } catch (error) {
@@ -79,7 +80,7 @@ const AutomationsPage = () => {
         try {
             await fetch(`/api/v2/automations/${id}`, {
                 method: 'DELETE',
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
             });
             setAutomations(automations.filter(a => a.id !== id));
         } catch (error) {
@@ -283,3 +284,4 @@ const CreateAutomationModal = ({ onClose, onCreate }) => {
 };
 
 export default AutomationsPage;
+

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Lock, Globe, RefreshCw, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react';
+import { Shield, Lock, Globe, RefreshCw, CheckCircle, AlertCircle, ExternalLink, Check } from 'lucide-react';
 
 const SSLPage = () => {
     const [sslStatus, setSslStatus] = useState(null);
@@ -16,7 +16,7 @@ const SSLPage = () => {
     const fetchSSLStatus = async () => {
         try {
             const res = await fetch('/api/system/ssl', {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
             });
             if (res.ok) {
                 const data = await res.json();
@@ -44,7 +44,7 @@ const SSLPage = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
+                    Authorization: `Bearer ${localStorage.getItem('sampmail_token')}`,
                 },
                 body: JSON.stringify({ domain, email }),
             });
@@ -69,7 +69,7 @@ const SSLPage = () => {
         try {
             const res = await fetch('/api/system/ssl/renew', {
                 method: 'POST',
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
             });
 
             const data = await res.json();

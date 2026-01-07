@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import EmailTemplateBuilder from '../components/EmailTemplateBuilder';
 import { Mail, Rocket, Sparkles, Lightbulb, ArrowLeft, Plus } from 'lucide-react';
 import ConfirmationModal from '../components/ConfirmationModal';
+import { getAuthHeaders } from '../api';
 
 const CampaignsPage = () => {
     const [campaigns, setCampaigns] = useState([]);
@@ -17,7 +18,7 @@ const CampaignsPage = () => {
     const fetchCampaigns = async () => {
         try {
             const res = await fetch('/api/v2/campaigns', {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
             });
             const data = await res.json();
             setCampaigns(data || []);
@@ -59,7 +60,7 @@ const CampaignsPage = () => {
         try {
             await fetch(`/api/v2/campaigns/${deleteId}`, {
                 method: 'DELETE',
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
             });
             fetchCampaigns();
         } catch (error) {
@@ -207,7 +208,7 @@ const CampaignWizard = ({ campaign, onCancel, onSave }) => {
                 method,
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
+                    Authorization: `Bearer ${localStorage.getItem('sampmail_token')}`,
                 },
                 body: JSON.stringify(form),
             });
@@ -398,3 +399,4 @@ const CampaignWizard = ({ campaign, onCancel, onSave }) => {
 };
 
 export default CampaignsPage;
+

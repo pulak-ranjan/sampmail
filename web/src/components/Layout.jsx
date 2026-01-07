@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, BarChart3, Globe, ShieldCheck, Key, MailWarning, Network,
   ListOrdered, Webhook, Settings, FileText, Lock, LogOut, Menu, X, ServerCog,
-  Wrench, Thermometer, Mail, Users, Tag, PieChart, Send, Zap, List, Filter, Ban, Radio, ShieldAlert, Building
+  Wrench, Thermometer, Mail, Users, Tag, PieChart, Send, Zap, List, Filter, Ban, Radio, ShieldAlert, Building, Server
 } from 'lucide-react';
 import { ThemeToggle } from './ThemeProvider';
 import { useAuth } from '../AuthContext';
@@ -42,6 +42,7 @@ export default function Layout({ children }) {
     { path: '/queue', icon: ListOrdered, label: 'Queue' },
     { path: '/webhooks', icon: Webhook, label: 'Webhooks' },
     { path: '/tools', icon: Wrench, label: 'System Tools' },
+    { path: '/services', icon: Server, label: 'Services' },
     { path: '/config', icon: ServerCog, label: 'Config Gen' },
     { path: '/logs', icon: FileText, label: 'System Logs' },
     { path: '/security', icon: Lock, label: 'Security' },
@@ -77,7 +78,7 @@ export default function Layout({ children }) {
       {/* Mobile Header */}
       <div className="md:hidden border-b bg-card flex items-center justify-between p-4 sticky top-0 z-30">
         <div className="font-bold text-lg flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold">S</div>
+          <img src="/sampmail-logo.png" alt="SampMail" className="w-8 h-8 rounded-lg" />
           SampMail
         </div>
         <button onClick={() => setIsMobileOpen(!isMobileOpen)} className="p-2 -mr-2">
@@ -91,7 +92,7 @@ export default function Layout({ children }) {
         isMobileOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="p-6 border-b flex items-center gap-3">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold text-xl">S</div>
+          <img src="/sampmail-logo.png" alt="SampMail" className="w-10 h-10 rounded-lg" />
           <div>
             <div className="font-bold text-foreground">SampMail</div>
             <div className="text-xs text-muted-foreground">Admin Panel</div>
