@@ -429,6 +429,33 @@ func (s *Server) routes() chi.Router {
 		r.Get("/suppression-check", policy.HandleSuppressionCheck)
 	})
 
+	// --- Static File Server for Frontend ---
+	// Serve the React frontend from web/dist directory
+	staticDir := "./web/dist"
+	fs := http.FileServer(http.Dir(staticDir))
+
+	// Handle all non-API routes as static files with SPA fallback
+	r.Get("/*", func(w http.ResponseWriter, req *http.Request) {
+		path := req.URL.Path
+
+		// Try to serve the exact file
+		fullPath := staticDir + path
+		if _, err := http.Dir(staticDir).Open(path); err == nil {
+			// Set correct MIME types
+			if strings.HasSuffix(path, ".js") || strings.HasSuffix(path, ".mjs") {
+				w.Header().Set("Content-Type", "application/javascript")
+			} else if strings.HasSuffix(path, ".css") {
+				w.Header().Set("Content-Type", "text/css")
+			}
+			fs.ServeHTTP(w, req)
+			return
+		}
+
+		// For SPA: serve index.html for any unmatched routes
+		_ = fullPath // unused when falling through
+		http.ServeFile(w, req, staticDir+"/index.html")
+	})
+
 	return r
 }
 
