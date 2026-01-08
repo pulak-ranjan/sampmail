@@ -142,14 +142,14 @@ func Get() *Config {
 			ReacherURL:    getEnv("REACHER_URL", "http://reacher:8080"),
 			ReacherAPIKey: os.Getenv("REACHER_API_KEY"),
 
-			// Database settings
-			DatabaseDriver:   getEnv("SAMPMAIL_DB_DRIVER", "sqlite"),
-			PostgresHost:     getEnv("SAMPMAIL_PG_HOST", "localhost"),
-			PostgresPort:     getEnvInt("SAMPMAIL_PG_PORT", 5432),
-			PostgresUser:     os.Getenv("SAMPMAIL_PG_USER"),
-			PostgresPassword: os.Getenv("SAMPMAIL_PG_PASSWORD"),
-			PostgresDatabase: os.Getenv("SAMPMAIL_PG_DATABASE"),
-			PostgresSSLMode:  getEnv("SAMPMAIL_PG_SSLMODE", "require"),
+			// Database settings - parse DATABASE_URL if present
+			DatabaseDriver:   parseDatabaseDriver(),
+			PostgresHost:     parsePostgresHost(),
+			PostgresPort:     parsePostgresPort(),
+			PostgresUser:     parsePostgresUser(),
+			PostgresPassword: parsePostgresPassword(),
+			PostgresDatabase: parsePostgresDatabase(),
+			PostgresSSLMode:  parsePostgresSSLMode(),
 			DBMaxOpenConns:   getEnvInt("SAMPMAIL_DB_MAX_OPEN_CONNS", 100),
 			DBMaxIdleConns:   getEnvInt("SAMPMAIL_DB_MAX_IDLE_CONNS", 10),
 
@@ -355,4 +355,161 @@ func getEnvInt64(key string, defaultValue int64) int64 {
 		}
 	}
 	return defaultValue
+}
+
+// DATABASE_URL parsing functions
+// Supports: postgres://user:password@host:port/database?sslmode=disable
+
+func parseDatabaseURL() string {
+	return os.Getenv("DATABASE_URL")
+}
+
+func parseDatabaseDriver() string {
+	// Check explicit driver setting first
+	if driver := os.Getenv("SAMPMAIL_DB_DRIVER"); driver != "" {
+		return driver
+	}
+	// Auto-detect from DATABASE_URL
+	dbURL := parseDatabaseURL()
+	if strings.HasPrefix(dbURL, "postgres://") || strings.HasPrefix(dbURL, "postgresql://") {
+		return "postgres"
+	}
+	return "sqlite"
+}
+
+func parsePostgresHost() string {
+	if host := os.Getenv("SAMPMAIL_PG_HOST"); host != "" {
+		return host
+	}
+	dbURL := parseDatabaseURL()
+	if dbURL == "" {
+		return "localhost"
+	}
+	// Parse: postgres://user:pass@host:port/db
+	dbURL = strings.TrimPrefix(dbURL, "postgres://")
+	dbURL = strings.TrimPrefix(dbURL, "postgresql://")
+	// Remove user:pass@ part
+	if idx := strings.Index(dbURL, "@"); idx != -1 {
+		dbURL = dbURL[idx+1:]
+	}
+	// Get host:port part
+	if idx := strings.Index(dbURL, "/"); idx != -1 {
+		dbURL = dbURL[:idx]
+	}
+	// Split host:port
+	host, _, _ := net.SplitHostPort(dbURL)
+	if host == "" {
+		return dbURL // No port specified
+	}
+	return host
+}
+
+func parsePostgresPort() int {
+	if port := os.Getenv("SAMPMAIL_PG_PORT"); port != "" {
+		if p, err := strconv.Atoi(port); err == nil {
+			return p
+		}
+	}
+	dbURL := parseDatabaseURL()
+	if dbURL == "" {
+		return 5432
+	}
+	// Parse: postgres://user:pass@host:port/db
+	dbURL = strings.TrimPrefix(dbURL, "postgres://")
+	dbURL = strings.TrimPrefix(dbURL, "postgresql://")
+	if idx := strings.Index(dbURL, "@"); idx != -1 {
+		dbURL = dbURL[idx+1:]
+	}
+	if idx := strings.Index(dbURL, "/"); idx != -1 {
+		dbURL = dbURL[:idx]
+	}
+	_, portStr, _ := net.SplitHostPort(dbURL)
+	if portStr != "" {
+		if p, err := strconv.Atoi(portStr); err == nil {
+			return p
+		}
+	}
+	return 5432
+}
+
+func parsePostgresUser() string {
+	if user := os.Getenv("SAMPMAIL_PG_USER"); user != "" {
+		return user
+	}
+	dbURL := parseDatabaseURL()
+	if dbURL == "" {
+		return ""
+	}
+	// Parse: postgres://user:pass@host:port/db
+	dbURL = strings.TrimPrefix(dbURL, "postgres://")
+	dbURL = strings.TrimPrefix(dbURL, "postgresql://")
+	if idx := strings.Index(dbURL, "@"); idx != -1 {
+		userPass := dbURL[:idx]
+		if colonIdx := strings.Index(userPass, ":"); colonIdx != -1 {
+			return userPass[:colonIdx]
+		}
+		return userPass
+	}
+	return ""
+}
+
+func parsePostgresPassword() string {
+	if pass := os.Getenv("SAMPMAIL_PG_PASSWORD"); pass != "" {
+		return pass
+	}
+	dbURL := parseDatabaseURL()
+	if dbURL == "" {
+		return ""
+	}
+	// Parse: postgres://user:pass@host:port/db
+	dbURL = strings.TrimPrefix(dbURL, "postgres://")
+	dbURL = strings.TrimPrefix(dbURL, "postgresql://")
+	if idx := strings.Index(dbURL, "@"); idx != -1 {
+		userPass := dbURL[:idx]
+		if colonIdx := strings.Index(userPass, ":"); colonIdx != -1 {
+			return userPass[colonIdx+1:]
+		}
+	}
+	return ""
+}
+
+func parsePostgresDatabase() string {
+	if db := os.Getenv("SAMPMAIL_PG_DATABASE"); db != "" {
+		return db
+	}
+	dbURL := parseDatabaseURL()
+	if dbURL == "" {
+		return ""
+	}
+	// Parse: postgres://user:pass@host:port/db?sslmode=disable
+	dbURL = strings.TrimPrefix(dbURL, "postgres://")
+	dbURL = strings.TrimPrefix(dbURL, "postgresql://")
+	if idx := strings.Index(dbURL, "/"); idx != -1 {
+		dbPart := dbURL[idx+1:]
+		// Remove query params
+		if qIdx := strings.Index(dbPart, "?"); qIdx != -1 {
+			dbPart = dbPart[:qIdx]
+		}
+		return dbPart
+	}
+	return ""
+}
+
+func parsePostgresSSLMode() string {
+	if mode := os.Getenv("SAMPMAIL_PG_SSLMODE"); mode != "" {
+		return mode
+	}
+	dbURL := parseDatabaseURL()
+	if dbURL == "" {
+		return "require"
+	}
+	// Parse ?sslmode=disable from URL
+	if idx := strings.Index(dbURL, "sslmode="); idx != -1 {
+		sslPart := dbURL[idx+8:]
+		if endIdx := strings.Index(sslPart, "&"); endIdx != -1 {
+			return sslPart[:endIdx]
+		}
+		return sslPart
+	}
+	return "disable" // Default to disable for local dev
 }

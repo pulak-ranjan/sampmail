@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.1] - 2026-01-07
+
+### Fixed
+
+- **Critical:** Database driver now auto-detected from `DATABASE_URL` environment variable
+- PostgreSQL connection works with standard `DATABASE_URL=postgres://user:pass@host:port/db?sslmode=disable` format
+- No longer requires separate `SAMPMAIL_DB_DRIVER=postgres` setting
+
+---
+
 ## [0.2.0] - 2026-01-07
 
 ### 🎉 Major Release: Multi-Tenancy & Admin Dashboard
@@ -135,6 +145,7 @@ This release introduces a complete separation between Admin and User roles, with
 
 | Version | Release Date | Notes |
 |---------|--------------|-------|
+| 0.2.1 | 2026-01-07 | DATABASE_URL auto-detection fix |
 | 0.2.0 | 2026-01-07 | Multi-tenancy, Admin/User Dashboards |
 | 0.1.12 | 2025-12-29 | Initial release |
 
