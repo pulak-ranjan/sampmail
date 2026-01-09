@@ -52,11 +52,6 @@ export default function LoginRegister() {
     }
   };
 
-  const toggleMode = () => {
-    setMode(mode === "login" ? "register" : "login");
-    setError("");
-    setSuccessMsg("");
-  };
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-4 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black text-slate-100 relative overflow-hidden">
@@ -147,8 +142,6 @@ export default function LoginRegister() {
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
             ) : step === 2 ? (
               "Verify Code"
-            ) : mode === "register" ? (
-              <span className="flex items-center">Create Account <ArrowRight className="ml-2 h-4 w-4" /></span>
             ) : (
               <span className="flex items-center">Sign In <ArrowRight className="ml-2 h-4 w-4" /></span>
             )}
