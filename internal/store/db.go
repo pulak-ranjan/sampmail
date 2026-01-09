@@ -292,7 +292,7 @@ func (s *Store) UpdateAdmin(u *models.AdminUser) error {
 
 func (s *Store) ListAdmins() ([]models.AdminUser, error) {
 	var users []models.AdminUser
-	err := s.DB.Order("created_at DESC").Find(&users).Error
+	err := s.DB.Find(&users).Error
 	return users, err
 }
 
