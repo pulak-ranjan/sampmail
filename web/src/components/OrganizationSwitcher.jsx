@@ -80,9 +80,8 @@ export default function OrganizationSwitcher() {
                         <div className="border-t border-gray-700 p-2 bg-gray-800/50">
                             <button
                                 onClick={() => {
-                                    // TODO: Implement Create Org Modal
                                     setIsOpen(false);
-                                    alert("Create Organization UI coming soon");
+                                    window.location.href = "/admin/tenants";
                                 }}
                                 className="flex items-center space-x-2 w-full px-2 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
                             >
@@ -92,7 +91,7 @@ export default function OrganizationSwitcher() {
                             <button
                                 onClick={() => {
                                     setIsOpen(false);
-                                    // Navigate to Superadmin Dashboard
+                                    window.location.href = "/admin/tenants";
                                 }}
                                 className="flex items-center space-x-2 w-full px-2 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors mt-1"
                             >
