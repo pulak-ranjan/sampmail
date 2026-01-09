@@ -41,8 +41,8 @@ func NewStore(path string) (*Store, error) {
 		&models.CampaignRecipient{},
 		&models.AutomationWorkflow{},
 		&models.WhatsAppMessage{},
-		&models.Suppression{},  // NEW: Suppression list
-		&models.BounceEvent{},  // NEW: Bounce tracking
+		&models.Suppression{},      // NEW: Suppression list
+		&models.BounceEvent{},      // NEW: Bounce tracking
 		&models.ProcessedLogFile{}, // NEW: Log processing state
 		// Phase 2: Template & Subscriber Management
 		&models.Template{},
@@ -290,6 +290,18 @@ func (s *Store) UpdateAdmin(u *models.AdminUser) error {
 	return s.DB.Save(u).Error
 }
 
+func (s *Store) ListAdmins() ([]models.AdminUser, error) {
+	var users []models.AdminUser
+	err := s.DB.Order("created_at DESC").Find(&users).Error
+	return users, err
+}
+
+func (s *Store) DeleteAdmin(id uint) error {
+	// Also delete organization memberships
+	s.DB.Where("admin_id = ?", id).Delete(&models.OrganizationUser{})
+	return s.DB.Delete(&models.AdminUser{}, id).Error
+}
+
 // ----------------------
 // Bounce Accounts
 // ----------------------
@@ -485,7 +497,7 @@ func (s *Store) RemoveSuppression(email string) error {
 func (s *Store) ListSuppressions(limit, offset int) ([]models.Suppression, int64, error) {
 	var sups []models.Suppression
 	var total int64
-	
+
 	s.DB.Model(&models.Suppression{}).Count(&total)
 	err := s.DB.Order("created_at desc").Limit(limit).Offset(offset).Find(&sups).Error
 	return sups, total, err
@@ -497,19 +509,19 @@ func (s *Store) BulkCheckSuppressed(emails []string) (map[string]bool, error) {
 	if len(emails) == 0 {
 		return result, nil
 	}
-	
+
 	// Normalize emails
 	normalized := make([]string, len(emails))
 	for i, e := range emails {
 		normalized[i] = strings.ToLower(strings.TrimSpace(e))
 	}
-	
+
 	var found []models.Suppression
 	err := s.DB.Where("email IN ?", normalized).Find(&found).Error
 	if err != nil {
 		return nil, err
 	}
-	
+
 	for _, sup := range found {
 		result[sup.Email] = true
 	}

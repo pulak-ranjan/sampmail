@@ -39,6 +39,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import UserDashboard from './pages/UserDashboard';
 
 import TenantsPage from './pages/admin/TenantsPage';
+import UsersPage from './pages/admin/UsersPage';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -79,6 +80,7 @@ export default function App() {
 
             {/* Superadmin Routes */}
             <Route path="/admin/tenants" element={<SuperAdminRoute><TenantsPage /></SuperAdminRoute>} />
+            <Route path="/admin/users" element={<SuperAdminRoute><UsersPage /></SuperAdminRoute>} />
             <Route path="/admin" element={<SuperAdminRoute><AdminDashboard /></SuperAdminRoute>} />
 
             {/* App Routes */}

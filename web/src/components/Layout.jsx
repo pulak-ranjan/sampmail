@@ -23,6 +23,7 @@ export default function Layout({ children }) {
   const adminLinks = [
     { path: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/admin/tenants', icon: Building, label: 'Organizations' },
+    { path: '/admin/users', icon: Users, label: 'Users' },
     { path: '/services', icon: Server, label: 'Services' },
     { path: '/network', label: 'Network & IPs', isHeader: true },
     { path: '/sending-ips', icon: Radio, label: 'Sending IPs' },
