@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Edit2, Shield, User, X, Check, Loader2 } from "lucide-react";
+import { Plus, Trash2, Edit2, Shield, User, X, Check, Loader2, Building, Link } from "lucide-react";
 
 const API_BASE = "/api";
 
@@ -23,6 +23,7 @@ async function apiRequest(endpoint, options = {}) {
 
 export default function UsersPage() {
     const [users, setUsers] = useState([]);
+    const [organizations, setOrganizations] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
@@ -30,8 +31,16 @@ export default function UsersPage() {
     const [error, setError] = useState(null);
     const [saving, setSaving] = useState(false);
 
+    // Organization assignment state
+    const [assignModalUser, setAssignModalUser] = useState(null);
+    const [userOrgs, setUserOrgs] = useState([]);
+    const [selectedOrgId, setSelectedOrgId] = useState("");
+    const [selectedRole, setSelectedRole] = useState("admin");
+    const [loadingOrgs, setLoadingOrgs] = useState(false);
+
     useEffect(() => {
         loadUsers();
+        loadOrganizations();
     }, []);
 
     const loadUsers = async () => {
@@ -43,6 +52,28 @@ export default function UsersPage() {
             setError("Failed to load users");
         } finally {
             setLoading(false);
+        }
+    };
+
+    const loadOrganizations = async () => {
+        try {
+            const data = await apiRequest("/v2/admin/organizations");
+            setOrganizations(Array.isArray(data) ? data : []);
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const loadUserOrgs = async (userId) => {
+        setLoadingOrgs(true);
+        try {
+            const data = await apiRequest(`/admin/users/${userId}/organizations`);
+            setUserOrgs(Array.isArray(data) ? data : []);
+        } catch (err) {
+            console.error(err);
+            setUserOrgs([]);
+        } finally {
+            setLoadingOrgs(false);
         }
     };
 
@@ -100,6 +131,46 @@ export default function UsersPage() {
         setError(null);
     };
 
+    const openAssignModal = (user) => {
+        setAssignModalUser(user);
+        loadUserOrgs(user.id);
+        setSelectedOrgId("");
+        setSelectedRole("admin");
+    };
+
+    const closeAssignModal = () => {
+        setAssignModalUser(null);
+        setUserOrgs([]);
+        setSelectedOrgId("");
+    };
+
+    const handleAssignOrg = async () => {
+        if (!selectedOrgId) return;
+        setSaving(true);
+        try {
+            await apiRequest(`/admin/users/${assignModalUser.id}/organizations`, {
+                method: "POST",
+                body: { organization_id: parseInt(selectedOrgId), role: selectedRole }
+            });
+            loadUserOrgs(assignModalUser.id);
+            setSelectedOrgId("");
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleRemoveOrg = async (orgId) => {
+        if (!window.confirm("Remove user from this organization?")) return;
+        try {
+            await apiRequest(`/admin/users/${assignModalUser.id}/organizations/${orgId}`, { method: "DELETE" });
+            loadUserOrgs(assignModalUser.id);
+        } catch (err) {
+            setError(err.message);
+        }
+    };
+
     if (loading) return <div className="p-8 text-center text-muted-foreground">Loading users...</div>;
 
     return (
@@ -107,7 +178,7 @@ export default function UsersPage() {
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold text-foreground">Users</h1>
-                    <p className="text-muted-foreground">Manage admin users and their permissions</p>
+                    <p className="text-muted-foreground">Manage admin users and their organizations</p>
                 </div>
                 <button
                     onClick={() => setIsModalOpen(true)}
@@ -168,6 +239,13 @@ export default function UsersPage() {
                                 </td>
                                 <td className="px-6 py-4 text-right">
                                     <div className="flex items-center justify-end space-x-2">
+                                        <button
+                                            onClick={() => openAssignModal(u)}
+                                            className="p-2 text-muted-foreground hover:text-blue-400 hover:bg-blue-500/10 rounded transition-colors"
+                                            title="Manage Organizations"
+                                        >
+                                            <Building size={16} />
+                                        </button>
                                         <button
                                             onClick={() => openEditModal(u)}
                                             className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
@@ -259,6 +337,90 @@ export default function UsersPage() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Organization Assignment Modal */}
+            {assignModalUser && (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+                    <div className="bg-card border border-border rounded-lg p-6 w-full max-w-lg shadow-2xl">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-bold text-foreground">
+                                Manage Organizations for {assignModalUser.email}
+                            </h2>
+                            <button onClick={closeAssignModal} className="text-muted-foreground hover:text-foreground">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Current Organizations */}
+                        <div className="mb-6">
+                            <h3 className="text-sm font-medium text-muted-foreground mb-2">Current Organizations</h3>
+                            {loadingOrgs ? (
+                                <div className="text-center py-4 text-muted-foreground">Loading...</div>
+                            ) : userOrgs.length === 0 ? (
+                                <div className="text-center py-4 text-muted-foreground bg-muted/20 rounded-lg">
+                                    User is not assigned to any organizations
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    {userOrgs.map((membership) => (
+                                        <div key={membership.id} className="flex items-center justify-between p-3 bg-muted/20 rounded-lg">
+                                            <div className="flex items-center space-x-3">
+                                                <Building size={16} className="text-blue-400" />
+                                                <span className="font-medium">{membership.organization?.name || `Org #${membership.organization_id}`}</span>
+                                                <span className="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">{membership.role}</span>
+                                            </div>
+                                            <button
+                                                onClick={() => handleRemoveOrg(membership.organization_id)}
+                                                className="p-1 text-muted-foreground hover:text-red-400"
+                                                title="Remove from organization"
+                                            >
+                                                <X size={16} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Add to Organization */}
+                        <div className="border-t border-border pt-4">
+                            <h3 className="text-sm font-medium text-muted-foreground mb-2">Add to Organization</h3>
+                            <div className="flex items-center space-x-2">
+                                <select
+                                    value={selectedOrgId}
+                                    onChange={(e) => setSelectedOrgId(e.target.value)}
+                                    className="flex-1 bg-background border border-border rounded-lg p-2.5 text-foreground"
+                                >
+                                    <option value="">Select organization...</option>
+                                    {organizations
+                                        .filter(org => !userOrgs.some(m => m.organization_id === org.id))
+                                        .map(org => (
+                                            <option key={org.id} value={org.id}>{org.name}</option>
+                                        ))
+                                    }
+                                </select>
+                                <select
+                                    value={selectedRole}
+                                    onChange={(e) => setSelectedRole(e.target.value)}
+                                    className="w-32 bg-background border border-border rounded-lg p-2.5 text-foreground"
+                                >
+                                    <option value="owner">Owner</option>
+                                    <option value="admin">Admin</option>
+                                    <option value="editor">Editor</option>
+                                    <option value="viewer">Viewer</option>
+                                </select>
+                                <button
+                                    onClick={handleAssignOrg}
+                                    disabled={!selectedOrgId || saving}
+                                    className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 flex items-center"
+                                >
+                                    {saving ? <Loader2 size={16} className="animate-spin" /> : <Link size={16} />}
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

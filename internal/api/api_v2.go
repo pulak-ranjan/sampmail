@@ -733,3 +733,37 @@ func (h *OrganizationHandler) DeleteOrganization(w http.ResponseWriter, r *http.
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
+
+// GetOrganizationMembers returns all users in an organization
+func (h *OrganizationHandler) GetOrganizationMembers(w http.ResponseWriter, r *http.Request) {
+	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
+
+	var memberships []models.OrganizationUser
+	if err := h.store.DB.Where("organization_id = ?", id).Find(&memberships).Error; err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	// Get admin details for each membership
+	type MemberResponse struct {
+		ID      uint   `json:"id"`
+		AdminID uint   `json:"admin_id"`
+		Email   string `json:"email"`
+		Role    string `json:"role"`
+	}
+
+	var response []MemberResponse
+	for _, m := range memberships {
+		var admin models.AdminUser
+		if err := h.store.DB.First(&admin, m.AdminID).Error; err == nil {
+			response = append(response, MemberResponse{
+				ID:      m.ID,
+				AdminID: m.AdminID,
+				Email:   admin.Email,
+				Role:    m.Role,
+			})
+		}
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}

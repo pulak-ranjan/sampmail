@@ -397,6 +397,7 @@ func (s *Server) routes() chi.Router {
 			r.Get("/api/v2/admin/organizations", adminOrgHandler.ListOrganizations)
 			r.Post("/api/v2/admin/organizations", adminOrgHandler.CreateOrganization)
 			r.Delete("/api/v2/admin/organizations/{id}", adminOrgHandler.DeleteOrganization)
+			r.Get("/api/v2/admin/organizations/{id}/members", adminOrgHandler.GetOrganizationMembers)
 
 			// User Management (Super Admin only)
 			usersHandler := NewUsersHandler(s.Store)
