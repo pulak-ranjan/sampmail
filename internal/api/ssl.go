@@ -193,34 +193,63 @@ func getCertificateInfo(certPath string) (*CertificateInfo, error) {
 func updateNginxDomain(domain string) error {
 	// Try Rocky/RHEL path first
 	confPath := "/etc/nginx/conf.d/sampmail.conf"
-	if _, err := os.Stat("/etc/nginx/sites-available/sampmail"); err == nil {
+	if _, err := os.Stat("/etc/nginx/sites-available"); err == nil {
 		confPath = "/etc/nginx/sites-available/sampmail"
 	}
 
+	var conf string
+
+	// Check if config file exists
 	data, err := ioutil.ReadFile(confPath)
 	if err != nil {
-		return err
+		// File doesn't exist - create default config
+		conf = fmt.Sprintf(`server {
+    listen 80;
+    server_name %s;
+
+    location / {
+        proxy_pass http://127.0.0.1:9000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+`, domain)
+	} else {
+		// File exists - update server_name
+		conf = string(data)
+		lines := strings.Split(conf, "\n")
+		for i, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "server_name") {
+				indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+				lines[i] = indent + "server_name " + domain + ";"
+				break
+			}
+		}
+		conf = strings.Join(lines, "\n")
+
+		// Create backup
+		backupPath := confPath + ".bak"
+		ioutil.WriteFile(backupPath, data, 0644)
 	}
 
-	conf := string(data)
+	// Write config
+	if err := ioutil.WriteFile(confPath, []byte(conf), 0644); err != nil {
+		return fmt.Errorf("failed to write config: %v", err)
+	}
 
-	// Replace server_name
-	lines := strings.Split(conf, "\n")
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "server_name") {
-			indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
-			lines[i] = indent + "server_name " + domain + ";"
-			break
+	// For Debian/Ubuntu, create symlink in sites-enabled
+	if strings.Contains(confPath, "sites-available") {
+		enabledPath := "/etc/nginx/sites-enabled/sampmail"
+		if _, err := os.Stat(enabledPath); os.IsNotExist(err) {
+			os.Symlink(confPath, enabledPath)
 		}
 	}
 
-	newConf := strings.Join(lines, "\n")
-
-	// Create backup
-	backupPath := confPath + ".bak"
-	ioutil.WriteFile(backupPath, data, 0644)
-
-	// Write new config
-	return ioutil.WriteFile(confPath, []byte(newConf), 0644)
+	return nil
 }
