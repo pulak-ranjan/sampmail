@@ -28,6 +28,7 @@ func NewCampaignHandler(st *store.Store) *CampaignHandler {
 // Routes registers the campaign API routes
 func (h *CampaignHandler) Routes(r chi.Router) {
 	r.Get("/", h.listCampaigns)
+	r.Get("/stats", h.getCampaignStats)
 	r.Post("/", h.createCampaign)
 	r.Post("/{id}/import", h.importRecipients)
 	r.Post("/{id}/send", h.startCampaign)
@@ -123,7 +124,7 @@ func (h *CampaignHandler) importRecipients(w http.ResponseWriter, r *http.Reques
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status": "imported",
-		"count": count,
+		"count":  count,
 	})
 }
 
@@ -149,4 +150,27 @@ func (h *CampaignHandler) getCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, campaign)
+}
+
+func (h *CampaignHandler) getCampaignStats(w http.ResponseWriter, r *http.Request) {
+	var stats struct {
+		TotalCampaigns  int64 `json:"total_campaigns"`
+		ActiveCampaigns int64 `json:"active_campaigns"`
+		DraftCampaigns  int64 `json:"draft_campaigns"`
+		SentCampaigns   int64 `json:"sent_campaigns"`
+		TotalSent       int64 `json:"total_sent"`
+		TotalOpen       int64 `json:"total_open"`
+		TotalClick      int64 `json:"total_click"`
+		TotalBounce     int64 `json:"total_bounce"`
+	}
+
+	h.Store.DB.Model(&models.Campaign{}).Count(&stats.TotalCampaigns)
+	h.Store.DB.Model(&models.Campaign{}).Where("status = ?", "active").Count(&stats.ActiveCampaigns)
+	h.Store.DB.Model(&models.Campaign{}).Where("status = ?", "draft").Count(&stats.DraftCampaigns)
+	h.Store.DB.Model(&models.Campaign{}).Where("status = ?", "sent").Count(&stats.SentCampaigns)
+
+	// Get aggregate stats from campaign recipients if table exists
+	h.Store.DB.Model(&models.CampaignRecipient{}).Count(&stats.TotalSent)
+
+	writeJSON(w, http.StatusOK, stats)
 }
