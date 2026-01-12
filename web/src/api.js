@@ -77,10 +77,24 @@ export function getSystemIPs() {
 }
 
 export function addSystemIPs(cidr, list) {
-  return apiRequest("/system/ips", {
-    method: "POST",
-    body: { cidr, list }
-  });
+  // Use CIDR endpoint if CIDR is provided
+  if (cidr && cidr.trim()) {
+    return apiRequest("/system/ips/cidr", {
+      method: "POST",
+      body: { cidr: cidr.trim() }
+    });
+  }
+
+  // Use bulk endpoint if list is provided
+  if (list && list.trim()) {
+    const ips = list.split('\n').map(ip => ip.trim()).filter(ip => ip);
+    return apiRequest("/system/ips/bulk", {
+      method: "POST",
+      body: { ips }
+    });
+  }
+
+  throw new Error("Please provide either a CIDR range or a list of IPs");
 }
 
 // NEW: Configure IP on Server (Needed for IPsPage)
