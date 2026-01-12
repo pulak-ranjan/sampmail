@@ -27,7 +27,7 @@ export default function TemplatesPage() {
       if (selectedCategory) params.append('category', selectedCategory);
 
       const res = await api.get(`/templates?${params}`);
-      setTemplates(res.data);
+      setTemplates(res.data || []);
     } catch (err) {
       console.error('Failed to load templates:', err);
     } finally {
