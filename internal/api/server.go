@@ -404,6 +404,9 @@ func (s *Server) routes() chi.Router {
 			r.Post("/api/admin/users", usersHandler.CreateUser)
 			r.Put("/api/admin/users/{id}", usersHandler.UpdateUser)
 			r.Delete("/api/admin/users/{id}", usersHandler.DeleteUser)
+			r.Get("/api/admin/users/{id}/organizations", usersHandler.ListUserOrgs)
+			r.Post("/api/admin/users/{id}/organizations", usersHandler.AssignUserToOrg)
+			r.Delete("/api/admin/users/{id}/organizations/{org_id}", usersHandler.RemoveUserFromOrg)
 		})
 
 		// Organizations (Multi-tenancy)

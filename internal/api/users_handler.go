@@ -179,3 +179,94 @@ func (h *UsersHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "User deleted successfully"})
 }
+
+// ListUserOrgs returns organizations a user belongs to
+func (h *UsersHandler) ListUserOrgs(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid user ID"})
+		return
+	}
+
+	var memberships []models.OrganizationUser
+	if err := h.Store.DB.Preload("Organization").Where("admin_id = ?", id).Find(&memberships).Error; err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, memberships)
+}
+
+// AssignUserToOrg assigns a user to an organization
+func (h *UsersHandler) AssignUserToOrg(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid user ID"})
+		return
+	}
+
+	var req struct {
+		OrganizationID uint   `json:"organization_id"`
+		Role           string `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+		return
+	}
+
+	if req.OrganizationID == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "organization_id is required"})
+		return
+	}
+
+	role := req.Role
+	if role == "" {
+		role = "admin"
+	}
+
+	// Check if already assigned
+	var existing models.OrganizationUser
+	if err := h.Store.DB.Where("admin_id = ? AND organization_id = ?", id, req.OrganizationID).First(&existing).Error; err == nil {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "User already assigned to this organization"})
+		return
+	}
+
+	membership := models.OrganizationUser{
+		AdminID:        uint(id),
+		OrganizationID: req.OrganizationID,
+		Role:           role,
+	}
+
+	if err := h.Store.DB.Create(&membership).Error; err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, membership)
+}
+
+// RemoveUserFromOrg removes a user from an organization
+func (h *UsersHandler) RemoveUserFromOrg(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid user ID"})
+		return
+	}
+
+	orgIdStr := chi.URLParam(r, "org_id")
+	orgId, err := strconv.ParseUint(orgIdStr, 10, 32)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid organization ID"})
+		return
+	}
+
+	if err := h.Store.DB.Where("admin_id = ? AND organization_id = ?", id, orgId).Delete(&models.OrganizationUser{}).Error; err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "User removed from organization"})
+}
