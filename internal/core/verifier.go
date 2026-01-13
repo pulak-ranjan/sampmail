@@ -574,8 +574,10 @@ func performSMTPCheck(dial func(network, addr string) (net.Conn, error), host, e
 	defer client.Quit()
 
 	helo := opts.HeloHost
-	if helo == "" {
-		helo = "check.kumomta.local"
+	if helo == "" || strings.HasSuffix(helo, ".local") {
+		// Use server IP as HELO if hostname not configured
+		// Many mail servers reject .local domains
+		helo = "mail.sampmail.com"
 	}
 
 	if err := client.Hello(helo); err != nil {
