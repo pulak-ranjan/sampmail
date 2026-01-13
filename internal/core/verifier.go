@@ -187,20 +187,34 @@ func VerifyEmail(email string, opts VerifierOptions) EmailVerificationResult {
 	}
 
 	// 3. Decide verification method
-	// If Reacher is configured, use it for ALL emails (more accurate)
-	// If not configured, fall back to local SMTP
+	// Strategy:
+	// - For hard-to-verify domains (gmail, yahoo, outlook): Use Reacher directly
+	// - For other domains: Try local SMTP first, Reacher for catch-all detection
 	hasReacher := opts.ReacherURL != "" || opts.ReacherBinPath != ""
+	isHardDomain := hardToVerifyDomains[res.Syntax.Domain]
 
-	// Use Reacher when: configured AND available
-	// Priority: Reacher > Local SMTP (Reacher handles edge cases better)
-	if hasReacher {
-		res.Log += "Using Reacher for verification. "
+	// For hard-to-verify domains (Gmail, Yahoo, etc.) - use Reacher directly
+	if hasReacher && isHardDomain {
+		res.Log += "Using Reacher for hard-to-verify domain. "
 		return verifyWithReacher(email, opts, res)
 	}
 
-	// 4. Fallback: Local SMTP Verification (only when Reacher not configured)
+	// For other domains: Try local SMTP first
 	res.Log += "Using local SMTP verification. "
-	return verifyWithLocalSMTP(email, opts, res, mxs[0].Host)
+	smtpResult := verifyWithLocalSMTP(email, opts, res, mxs[0].Host)
+
+	// If SMTP succeeded and Reacher is available, use Reacher for catch-all detection
+	if hasReacher && smtpResult.SMTP.CanConnect && !smtpResult.SMTP.IsCatchAll {
+		res.Log += "Checking catch-all via Reacher. "
+		reacherResult := verifyWithReacher(email, opts, smtpResult)
+		// If SMTP says deliverable but Reacher says catch-all, trust Reacher
+		if reacherResult.SMTP.IsCatchAll {
+			smtpResult.SMTP.IsCatchAll = true
+			smtpResult.Log += "Reacher detected catch-all. "
+		}
+	}
+
+	return smtpResult
 }
 
 // verifyWithReacher uses either the binary or HTTP API
@@ -288,12 +302,11 @@ func verifyWithReacherAPI(email string, opts VerifierOptions, res EmailVerificat
 		HelloName: opts.HeloHost,
 	}
 
+	// Use settings values - SenderEmail and HelloName should come from Settings
 	if reqBody.FromEmail == "" {
-		reqBody.FromEmail = "verify@sampmail.local"
+		reqBody.FromEmail = "verify@" + opts.HeloHost
 	}
-	if reqBody.HelloName == "" {
-		reqBody.HelloName = "sampmail.local"
-	}
+	// HeloHost comes from Settings -> main_hostname (configured in frontend)
 
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
