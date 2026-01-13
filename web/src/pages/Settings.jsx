@@ -65,8 +65,9 @@ export default function Settings() {
     try {
       await saveSettings(form);
       setMsg({ text: "Settings saved successfully!", type: "success" });
-      // Clear sensitive fields after save
-      setForm((f) => ({ ...f, ai_api_key: "", reacher_api_key: "", whatsapp_access_token: "" }));
+      // Refetch settings to show current values
+      const updated = await getSettings();
+      setForm((f) => ({ ...f, ...updated, ai_api_key: "", reacher_api_key: "", whatsapp_access_token: "" }));
     } catch (err) {
       setMsg({ text: err.message || "Failed to save settings", type: "error" });
     } finally {
