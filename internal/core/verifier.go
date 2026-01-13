@@ -283,10 +283,9 @@ func verifyWithReacherAPI(email string, opts VerifierOptions, res EmailVerificat
 	res.Source = "reacher_api"
 
 	reqBody := ReacherRequest{
-		ToEmail:     email,
-		FromEmail:   opts.SenderEmail,
-		HelloName:   opts.HeloHost,
-		SmtpTimeout: "10s",
+		ToEmail:   email,
+		FromEmail: opts.SenderEmail,
+		HelloName: opts.HeloHost,
 	}
 
 	if reqBody.FromEmail == "" {
