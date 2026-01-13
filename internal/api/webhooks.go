@@ -117,3 +117,104 @@ func (s *Server) handleCheckBounces(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "checked"})
 }
+
+// Webhook CRUD handlers for WebhooksPage.jsx compatibility
+// Note: These use the single webhook URL stored in settings, but expose a list-like interface
+
+// handleListWebhooks returns webhooks as a list (for frontend compatibility)
+func (s *Server) handleListWebhooks(w http.ResponseWriter, r *http.Request) {
+	settings, err := s.Store.GetSettings()
+	if err != nil || settings.WebhookURL == "" {
+		writeJSON(w, http.StatusOK, []interface{}{})
+		return
+	}
+
+	// Return the single configured webhook as a list
+	webhooks := []map[string]interface{}{
+		{
+			"id":      1,
+			"url":     settings.WebhookURL,
+			"enabled": settings.WebhookEnabled,
+			"events":  []string{"bounce", "delivery", "open", "click"},
+		},
+	}
+	writeJSON(w, http.StatusOK, webhooks)
+}
+
+// handleCreateWebhook creates/updates the webhook URL
+func (s *Server) handleCreateWebhook(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		URL    string   `json:"url"`
+		Events []string `json:"events"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+
+	if req.URL == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "url required"})
+		return
+	}
+
+	if err := core.ValidateWebhookURL(req.URL); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid URL: " + err.Error()})
+		return
+	}
+
+	settings, err := s.Store.GetSettings()
+	if err != nil {
+		settings = &models.AppSettings{}
+	}
+
+	settings.WebhookURL = req.URL
+	settings.WebhookEnabled = true
+
+	if err := s.Store.UpsertSettings(settings); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to save webhook"})
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]interface{}{
+		"id":      1,
+		"url":     req.URL,
+		"enabled": true,
+		"events":  req.Events,
+	})
+}
+
+// handleDeleteWebhook removes the webhook configuration
+func (s *Server) handleDeleteWebhook(w http.ResponseWriter, r *http.Request) {
+	settings, err := s.Store.GetSettings()
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+		return
+	}
+
+	settings.WebhookURL = ""
+	settings.WebhookEnabled = false
+
+	if err := s.Store.UpsertSettings(settings); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to delete webhook"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// handleTestSingleWebhook tests a specific webhook by ID
+func (s *Server) handleTestSingleWebhook(w http.ResponseWriter, r *http.Request) {
+	settings, err := s.Store.GetSettings()
+	if err != nil || settings.WebhookURL == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no webhook configured"})
+		return
+	}
+
+	if err := s.WS.SendTestWebhook(settings.WebhookURL); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "sent"})
+}

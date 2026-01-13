@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, BarChart3, Globe, ShieldCheck, Key, MailWarning, Network,
   ListOrdered, Webhook, Settings, FileText, Lock, LogOut, Menu, X, ServerCog,
-  Wrench, Thermometer, Mail, Users, Tag, PieChart, Send, Zap, List, Filter, Ban, Radio, ShieldAlert, Building, Server
+  Wrench, Thermometer, Mail, Users, Tag, PieChart, Send, Zap, List, Filter, Ban, Radio, ShieldAlert, Building, Server, CheckCircle
 } from 'lucide-react';
 import { ThemeToggle } from './ThemeProvider';
 import { useAuth } from '../AuthContext';
@@ -52,6 +52,7 @@ export default function Layout({ children }) {
     { path: '/tags', icon: Tag, label: 'Tags' },
     { path: '/segments', icon: Filter, label: 'Segments' },
     { path: '/suppressions', icon: Ban, label: 'Suppressions' },
+    { path: '/verify', icon: CheckCircle, label: 'Email Verification' },
     { path: '/reports', label: 'Reports', isHeader: true },
     { path: '/stats', icon: BarChart3, label: 'Statistics' },
     { path: '/analytics', icon: PieChart, label: 'Analytics' },

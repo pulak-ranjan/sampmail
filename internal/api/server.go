@@ -146,9 +146,21 @@ func (s *Server) routes() chi.Router {
 		// DMARC & DNS
 		r.Get("/api/dmarc/{domainID}", s.handleGetDMARC)
 		r.Post("/api/dmarc/{domainID}", s.handleSetDMARC)
+		r.Get("/api/dmarc/reports", s.handleGetDMARCReports) // Frontend compatibility
+		r.Get("/api/dmarc/stats", s.handleGetDMARCStats)     // Frontend compatibility
 		r.Get("/api/dns/{domainID}", s.handleGetAllDNS)
 
+		// Lists (aliases for /v2/lists for frontend compatibility)
+		listHandler := NewListHandler(s.Store)
+		r.Get("/api/lists", listHandler.ListLists)
+		r.Post("/api/lists", listHandler.CreateList)
+		r.Get("/api/lists/{id}", listHandler.GetList)
+		r.Delete("/api/lists/{id}", listHandler.DeleteList)
+		r.Get("/api/lists/{id}/contacts", listHandler.ListSubscribers)
+		r.Post("/api/lists/{id}/contacts", listHandler.AddSubscriber)
+
 		// Stats
+		r.Get("/api/stats", s.handleGetStatsSummary) // Alias for frontend compatibility
 		r.Get("/api/stats/domains", s.handleGetDomainStats)
 		r.Get("/api/stats/domains/{domain}", s.handleGetSingleDomainStats)
 		r.Get("/api/stats/summary", s.handleGetStatsSummary)
@@ -160,12 +172,18 @@ func (s *Server) routes() chi.Router {
 		r.Delete("/api/queue/{id}", s.handleDeleteQueueMessage)
 		r.Post("/api/queue/flush", s.handleFlushQueue)
 
-		// Webhooks
+		// Webhooks - Settings
 		r.Get("/api/webhooks/settings", s.handleGetWebhookSettings)
 		r.Post("/api/webhooks/settings", s.handleSetWebhookSettings)
 		r.Post("/api/webhooks/test", s.handleTestWebhook)
 		r.Get("/api/webhooks/logs", s.handleGetWebhookLogs)
 		r.Post("/api/webhooks/check-bounces", s.handleCheckBounces)
+
+		// Webhooks - CRUD (for WebhooksPage.jsx)
+		r.Get("/api/webhooks", s.handleListWebhooks)
+		r.Post("/api/webhooks", s.handleCreateWebhook)
+		r.Delete("/api/webhooks/{id}", s.handleDeleteWebhook)
+		r.Post("/api/webhooks/{id}/test", s.handleTestSingleWebhook)
 
 		// System Tools & Actions (Guardian)
 		r.Post("/api/system/check-blacklist", s.handleCheckBlacklist)

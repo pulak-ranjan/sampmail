@@ -117,3 +117,39 @@ func (s *Server) handleGetAllDNS(w http.ResponseWriter, r *http.Request) {
 		"live":      live,
 	})
 }
+
+// GET /api/dmarc/reports - Returns DMARC aggregate reports (placeholder)
+// Note: Real DMARC reports require external aggregation service integration
+func (s *Server) handleGetDMARCReports(w http.ResponseWriter, r *http.Request) {
+	// Return empty array - DMARC report aggregation requires external feed
+	writeJSON(w, http.StatusOK, []interface{}{})
+}
+
+// GET /api/dmarc/stats - Returns DMARC statistics summary
+func (s *Server) handleGetDMARCStats(w http.ResponseWriter, r *http.Request) {
+	domains, _ := s.Store.ListDomains()
+
+	stats := map[string]interface{}{
+		"total_domains":     len(domains),
+		"policy_none":       0,
+		"policy_quarantine": 0,
+		"policy_reject":     0,
+		"configured":        0,
+	}
+
+	for _, d := range domains {
+		if d.DMARCPolicy != "" {
+			stats["configured"] = stats["configured"].(int) + 1
+			switch d.DMARCPolicy {
+			case "none":
+				stats["policy_none"] = stats["policy_none"].(int) + 1
+			case "quarantine":
+				stats["policy_quarantine"] = stats["policy_quarantine"].(int) + 1
+			case "reject":
+				stats["policy_reject"] = stats["policy_reject"].(int) + 1
+			}
+		}
+	}
+
+	writeJSON(w, http.StatusOK, stats)
+}
