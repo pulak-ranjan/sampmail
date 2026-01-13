@@ -7,6 +7,9 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/pulak-ranjan/sampmail/internal/models"
+	"github.com/pulak-ranjan/sampmail/internal/store"
 )
 
 // ServiceStatus represents the status of a service
@@ -20,11 +23,18 @@ type ServiceStatus struct {
 }
 
 // ServiceHandler handles service management operations
-type ServiceHandler struct{}
+type ServiceHandler struct {
+	Store *store.Store
+}
 
 // NewServiceHandler creates a new service handler
 func NewServiceHandler() *ServiceHandler {
 	return &ServiceHandler{}
+}
+
+// NewServiceHandlerWithStore creates a new service handler with store access
+func NewServiceHandlerWithStore(st *store.Store) *ServiceHandler {
+	return &ServiceHandler{Store: st}
 }
 
 // Services configuration
@@ -322,7 +332,29 @@ docker rm -f reacher 2>/dev/null || true
 docker run -d --name reacher --restart unless-stopped -p 8080:8080 reacherhq/backend:latest
 echo "Reacher installed and running on port 8080"
 `
-	return h.runScript(script)
+	result, err := h.runScript(script)
+	if err != nil {
+		return result, err
+	}
+
+	// Auto-configure Reacher URL in settings
+	if h.Store != nil {
+		settings, sErr := h.Store.GetSettings()
+		if sErr != nil {
+			settings = &models.AppSettings{}
+		}
+
+		// Set Reacher URL to local Docker container
+		settings.ReacherURL = "http://127.0.0.1:8080"
+
+		if uErr := h.Store.UpsertSettings(settings); uErr != nil {
+			result += "\nWarning: Could not auto-configure Reacher URL in settings: " + uErr.Error()
+		} else {
+			result += "\nAuto-configured Reacher URL: http://127.0.0.1:8080"
+		}
+	}
+
+	return result, nil
 }
 
 // Helper: Run shell script

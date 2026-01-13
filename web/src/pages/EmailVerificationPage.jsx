@@ -235,19 +235,27 @@ export default function EmailVerificationPage() {
                                 <div className="grid grid-cols-2 gap-4 text-sm">
                                     <div className="bg-muted/30 rounded-lg p-3">
                                         <div className="text-muted-foreground">Score</div>
-                                        <div className="font-semibold text-lg">{singleResult.score || 'N/A'}</div>
+                                        <div className="font-semibold text-lg">{singleResult.risk_score ?? singleResult.score ?? 'N/A'}</div>
                                     </div>
                                     <div className="bg-muted/30 rounded-lg p-3">
                                         <div className="text-muted-foreground">MX Valid</div>
-                                        <div className="font-semibold text-lg">{singleResult.mx_valid ? 'Yes' : 'No'}</div>
+                                        <div className="font-semibold text-lg">{(singleResult.mx?.accepts_mail || singleResult.mx_valid) ? 'Yes' : 'No'}</div>
                                     </div>
                                     <div className="bg-muted/30 rounded-lg p-3">
                                         <div className="text-muted-foreground">Disposable</div>
-                                        <div className="font-semibold text-lg">{singleResult.disposable ? 'Yes' : 'No'}</div>
+                                        <div className="font-semibold text-lg">{(singleResult.misc?.is_disposable || singleResult.disposable) ? 'Yes' : 'No'}</div>
                                     </div>
                                     <div className="bg-muted/30 rounded-lg p-3">
                                         <div className="text-muted-foreground">Catch-All</div>
-                                        <div className="font-semibold text-lg">{singleResult.catch_all ? 'Yes' : 'No'}</div>
+                                        <div className="font-semibold text-lg">{(singleResult.smtp?.is_catch_all || singleResult.catch_all) ? 'Yes' : 'No'}</div>
+                                    </div>
+                                    <div className="bg-muted/30 rounded-lg p-3">
+                                        <div className="text-muted-foreground">Deliverable</div>
+                                        <div className="font-semibold text-lg">{(singleResult.smtp?.is_deliverable || singleResult.is_reachable === 'safe') ? 'Yes' : 'No'}</div>
+                                    </div>
+                                    <div className="bg-muted/30 rounded-lg p-3">
+                                        <div className="text-muted-foreground">Status</div>
+                                        <div className="font-semibold text-lg capitalize">{singleResult.is_reachable || singleResult.status || 'Unknown'}</div>
                                     </div>
                                 </div>
 

@@ -235,7 +235,7 @@ func (s *Server) routes() chi.Router {
 		r.Get("/api/updates/changelog", s.handleUpdateChangelog)
 
 		// Service Manager - One-click install and control
-		serviceManager := NewServiceHandler()
+		serviceManager := NewServiceHandlerWithStore(s.Store)
 		r.Get("/api/services/status", serviceManager.HandleGetStatus)
 		r.Post("/api/services/kumomta/install", serviceManager.HandleInstall)
 		r.Post("/api/services/kumomta/start", serviceManager.HandleStart)
