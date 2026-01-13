@@ -32,6 +32,11 @@ type AppSettings struct {
 	ReacherAPIKey  string `json:"reacher_api_key"`  // API key for hosted Reacher
 	ReacherBinPath string `json:"reacher_bin_path"` // Path to check_if_email_exists binary (preferred, no port conflicts)
 
+	// Verification Configuration
+	VerificationIPs string `json:"verification_ips"` // Comma/newline separated IPs for verification (NOT sending IPs!)
+	EnableCatchall  bool   `json:"enable_catchall"`  // Enable catch-all detection (requires proxy for safety)
+	UseReacherOnly  bool   `json:"use_reacher_only"` // Skip local SMTP, use Reacher for all domains
+
 	// CORS
 	AllowedOrigins string `json:"allowed_origins"` // Comma-separated list of origins
 

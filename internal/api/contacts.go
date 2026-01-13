@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -38,6 +39,18 @@ func (h *ContactHandler) buildVerifierOpts() core.VerifierOptions {
 		opts.ReacherURL = s.ReacherURL
 		opts.ReacherAPIKey = s.ReacherAPIKey
 		opts.ReacherBinPath = s.ReacherBinPath
+		opts.UseReacherOnly = s.UseReacherOnly
+		opts.SkipCatchAllTest = !s.EnableCatchall // If catchall disabled, skip the test
+
+		// Parse verification IPs (comma or newline separated)
+		if s.VerificationIPs != "" {
+			for _, ip := range strings.Split(strings.ReplaceAll(s.VerificationIPs, "\n", ","), ",") {
+				ip = strings.TrimSpace(ip)
+				if ip != "" {
+					opts.SourceIPs = append(opts.SourceIPs, ip)
+				}
+			}
+		}
 	}
 
 	// Fetch Source IPs

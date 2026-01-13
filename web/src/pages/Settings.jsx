@@ -328,6 +328,49 @@ export default function Settings() {
                     SOCKS5 or HTTP proxy for verification (helps avoid IP blocks)
                   </p>
                 </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Verification IPs (Optional)</label>
+                  <textarea
+                    name="verification_ips"
+                    value={form.verification_ips}
+                    onChange={onChange}
+                    rows={3}
+                    className="w-full rounded-lg border bg-background px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-primary focus:outline-none resize-none"
+                    placeholder="192.168.1.100&#10;192.168.1.101&#10;(one IP per line)"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    IPs to use for verification (NOT your sending IPs). Leave empty to use server default.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                  <div>
+                    <label className="text-sm font-medium">Enable Catch-All Detection</label>
+                    <p className="text-xs text-muted-foreground">Tests if domain accepts all emails (requires proxy)</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    name="enable_catchall"
+                    checked={form.enable_catchall || false}
+                    onChange={onChange}
+                    className="w-5 h-5 rounded border-gray-600 text-primary focus:ring-primary"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                  <div>
+                    <label className="text-sm font-medium">Use Reacher for All Domains</label>
+                    <p className="text-xs text-muted-foreground">Use Reacher instead of SMTP (more accurate but slower)</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    name="use_reacher_only"
+                    checked={form.use_reacher_only || false}
+                    onChange={onChange}
+                    className="w-5 h-5 rounded border-gray-600 text-primary focus:ring-primary"
+                  />
+                </div>
               </div>
 
               <button
