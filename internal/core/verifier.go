@@ -91,6 +91,34 @@ var hardToVerifyDomains = map[string]bool{
 	"comcast.net": true, "verizon.net": true, "att.net": true,
 }
 
+// Shared hosting MX patterns - these often have catch-all enabled, use Reacher
+var sharedHostingPatterns = []string{
+	// iPage / Endurance
+	"ipage.com", "ipagemail.com",
+	// Bluehost
+	"bluehost.com", "box.com",
+	// HostGator
+	"hostgator.com",
+	// GoDaddy
+	"secureserver.net", "mailstore1.secureserver.net",
+	// cPanel / WHM shared hosting
+	"cpanel.net", "cptunnel.net",
+	// Namecheap
+	"registrar-servers.com", "privateemail.com",
+	// Hostinger
+	"hostinger.com", "titan.email",
+	// SiteGround
+	"sgcpanel.com",
+	// A2 Hosting
+	"a2hosting.com",
+	// DreamHost
+	"dreamhost.com",
+	// InMotion
+	"inmotionhosting.com",
+	// Generic shared hosting patterns
+	"mail.", "mx.", "smtp.", "relay.",
+}
+
 // VerifierOptions configures the check
 type VerifierOptions struct {
 	SenderEmail string
@@ -186,16 +214,35 @@ func VerifyEmail(email string, opts VerifierOptions) EmailVerificationResult {
 		res.MX.Records = append(res.MX.Records, mx.Host)
 	}
 
-	// 3. Decide verification method
+	// 3. Check if domain uses shared hosting (often have catch-all)
+	isSharedHosting := false
+	for _, mx := range mxs {
+		mxLower := strings.ToLower(mx.Host)
+		for _, pattern := range sharedHostingPatterns {
+			if strings.Contains(mxLower, pattern) {
+				isSharedHosting = true
+				break
+			}
+		}
+		if isSharedHosting {
+			break
+		}
+	}
+
+	// 4. Decide verification method
 	// Strategy:
 	// - For hard-to-verify domains (gmail, yahoo, outlook): Use Reacher directly
-	// - For other domains: Try local SMTP first, Reacher for catch-all detection
+	// - For shared hosting (ipage, cpanel, etc.): Use Reacher (catch-all common)
+	// - For other domains: Try local SMTP first, Reacher for catch-all/fallback
 	hasReacher := opts.ReacherURL != "" || opts.ReacherBinPath != ""
 	isHardDomain := hardToVerifyDomains[res.Syntax.Domain]
 
-	// For hard-to-verify domains (Gmail, Yahoo, etc.) - use Reacher directly
-	if hasReacher && isHardDomain {
-		res.Log += "Using Reacher for hard-to-verify domain. "
+	// Use Reacher directly for hard domains or shared hosting
+	if hasReacher && (isHardDomain || isSharedHosting || opts.UseReacherOnly) {
+		if isSharedHosting {
+			res.Log += "Shared hosting detected. "
+		}
+		res.Log += "Using Reacher for verification. "
 		return verifyWithReacher(email, opts, res)
 	}
 
@@ -204,12 +251,14 @@ func VerifyEmail(email string, opts VerifierOptions) EmailVerificationResult {
 	smtpResult := verifyWithLocalSMTP(email, opts, res, mxs[0].Host)
 
 	// If SMTP succeeded and Reacher is available, use Reacher for catch-all detection
-	if hasReacher && smtpResult.SMTP.CanConnect && !smtpResult.SMTP.IsCatchAll {
+	if hasReacher && smtpResult.SMTP.CanConnect && !smtpResult.SMTP.IsCatchAll && !opts.SkipCatchAllTest {
 		res.Log += "Checking catch-all via Reacher. "
 		reacherResult := verifyWithReacher(email, opts, smtpResult)
 		// If SMTP says deliverable but Reacher says catch-all, trust Reacher
 		if reacherResult.SMTP.IsCatchAll {
 			smtpResult.SMTP.IsCatchAll = true
+			smtpResult.IsReachable = "risky"
+			smtpResult.RiskScore = 50
 			smtpResult.Log += "Reacher detected catch-all. "
 		}
 	}

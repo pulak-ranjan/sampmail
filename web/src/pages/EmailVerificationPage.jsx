@@ -285,16 +285,72 @@ export default function EmailVerificationPage() {
                                 <FileText className="w-5 h-5" />
                                 Enter Emails
                             </h3>
+
+                            {/* CSV Upload Section */}
+                            <div className="mb-4">
+                                <label
+                                    htmlFor="csv-upload"
+                                    className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary/50 transition-colors bg-muted/30"
+                                >
+                                    <div className="flex flex-col items-center justify-center py-2">
+                                        <Upload className="w-6 h-6 mb-1 text-muted-foreground" />
+                                        <p className="text-sm text-muted-foreground">
+                                            <span className="font-medium text-primary">Upload CSV</span> or drag & drop
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">First column = emails</p>
+                                    </div>
+                                    <input
+                                        id="csv-upload"
+                                        type="file"
+                                        accept=".csv,.txt"
+                                        className="hidden"
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (!file) return;
+                                            const reader = new FileReader();
+                                            reader.onload = (event) => {
+                                                const text = event.target?.result;
+                                                if (typeof text === 'string') {
+                                                    // Parse CSV - extract emails from first column
+                                                    const lines = text.split(/[\r\n]+/).filter(l => l.trim());
+                                                    const emails = lines.map(line => {
+                                                        const firstCol = line.split(',')[0].replace(/"/g, '').trim();
+                                                        return firstCol.includes('@') ? firstCol : '';
+                                                    }).filter(e => e);
+                                                    setBulkEmails(emails.join('\n'));
+                                                }
+                                            };
+                                            reader.readAsText(file);
+                                            e.target.value = ''; // Reset for re-upload
+                                        }}
+                                    />
+                                </label>
+                            </div>
+
+                            <div className="relative mb-3">
+                                <div className="absolute inset-0 flex items-center">
+                                    <span className="w-full border-t" />
+                                </div>
+                                <div className="relative flex justify-center text-xs uppercase">
+                                    <span className="bg-card px-2 text-muted-foreground">or paste manually</span>
+                                </div>
+                            </div>
+
                             <form onSubmit={verifyBulk} className="space-y-4">
                                 <textarea
                                     value={bulkEmails}
                                     onChange={(e) => setBulkEmails(e.target.value)}
-                                    rows={12}
+                                    rows={8}
                                     placeholder={"user1@example.com\nuser2@example.com\nuser3@example.com"}
                                     className="w-full bg-background border border-border rounded-lg p-3 text-foreground text-sm font-mono focus:ring-2 focus:ring-primary focus:outline-none resize-none"
                                 />
-                                <div className="text-sm text-muted-foreground">
-                                    {bulkEmails.split('\n').filter(e => e.trim() && e.includes('@')).length} valid emails
+                                <div className="flex justify-between text-sm text-muted-foreground">
+                                    <span>{bulkEmails.split('\n').filter(e => e.trim() && e.includes('@')).length} emails</span>
+                                    {bulkEmails && (
+                                        <button type="button" onClick={() => setBulkEmails('')} className="text-red-400 hover:text-red-300">
+                                            Clear
+                                        </button>
+                                    )}
                                 </div>
                                 <button
                                     type="submit"

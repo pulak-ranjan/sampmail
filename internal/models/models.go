@@ -33,9 +33,10 @@ type AppSettings struct {
 	ReacherBinPath string `json:"reacher_bin_path"` // Path to check_if_email_exists binary (preferred, no port conflicts)
 
 	// Verification Configuration
-	VerificationIPs string `json:"verification_ips"` // Comma/newline separated IPs for verification (NOT sending IPs!)
-	EnableCatchall  bool   `json:"enable_catchall"`  // Enable catch-all detection (requires proxy for safety)
-	UseReacherOnly  bool   `json:"use_reacher_only"` // Skip local SMTP, use Reacher for all domains
+	VerificationIPs   string `json:"verification_ips"`    // Comma/newline separated IPs for verification (NOT sending IPs!)
+	EnableCatchall    bool   `json:"enable_catchall"`     // Enable catch-all detection (requires proxy for safety)
+	UseReacherOnly    bool   `json:"use_reacher_only"`    // Skip local SMTP, use Reacher for all domains
+	VerifyTimeoutSecs int    `json:"verify_timeout_secs"` // Timeout in seconds for SMTP verification (default: 10)
 
 	// CORS
 	AllowedOrigins string `json:"allowed_origins"` // Comma-separated list of origins
