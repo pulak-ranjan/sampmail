@@ -187,15 +187,18 @@ func VerifyEmail(email string, opts VerifierOptions) EmailVerificationResult {
 	}
 
 	// 3. Decide verification method
+	// If Reacher is configured, use it for ALL emails (more accurate)
+	// If not configured, fall back to local SMTP
 	hasReacher := opts.ReacherURL != "" || opts.ReacherBinPath != ""
-	useReacher := opts.UseReacherOnly || (hasReacher && hardToVerifyDomains[res.Syntax.Domain])
 
-	if useReacher && hasReacher {
+	// Use Reacher when: configured AND available
+	// Priority: Reacher > Local SMTP (Reacher handles edge cases better)
+	if hasReacher {
 		res.Log += "Using Reacher for verification. "
 		return verifyWithReacher(email, opts, res)
 	}
 
-	// 4. Local SMTP Verification
+	// 4. Fallback: Local SMTP Verification (only when Reacher not configured)
 	res.Log += "Using local SMTP verification. "
 	return verifyWithLocalSMTP(email, opts, res, mxs[0].Host)
 }
