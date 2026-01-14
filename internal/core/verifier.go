@@ -131,9 +131,10 @@ type VerifierOptions struct {
 	ReacherAPIKey  string // API key for hosted Reacher
 	ReacherBinPath string // Path to check_if_email_exists binary (e.g., "/usr/local/bin/check_if_email_exists")
 
-	UseReacherOnly   bool // If true, skip local SMTP checks entirely
-	SkipCatchAllTest bool // If true, skip the catch-all probe (safer for reputation)
-	RequireProxy     bool // If true, only verify via proxy (protects sending IP reputation)
+	UseReacherOnly       bool // If true, skip local SMTP checks entirely
+	SkipCatchAllTest     bool // If true, skip the catch-all probe (safer for reputation)
+	RequireProxy         bool // If true, only verify via proxy (protects sending IP reputation)
+	ForceCatchallNoProxy bool // RISKY: Allow catch-all detection even without proxy
 }
 
 // ReacherRequest is the request body for Reacher HTTP API
@@ -532,9 +533,12 @@ func verifyWithLocalSMTP(email string, opts VerifierOptions, res EmailVerificati
 		res.Log += fmt.Sprintf("[Attempt %d] ", i+1)
 
 		// Only do catch-all check via proxy to protect sending IP reputation
+		// Unless ForceCatchallNoProxy is enabled (RISKY - can hurt sending reputation)
 		allowCatchAll := false
-		if i < len(usingProxy) && usingProxy[i] && !opts.SkipCatchAllTest {
-			allowCatchAll = true
+		if !opts.SkipCatchAllTest {
+			if (i < len(usingProxy) && usingProxy[i]) || opts.ForceCatchallNoProxy {
+				allowCatchAll = true
+			}
 		}
 
 		result := performSMTPCheck(dial, mxHost, email, opts, allowCatchAll)

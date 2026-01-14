@@ -371,6 +371,20 @@ export default function Settings() {
                     className="w-5 h-5 rounded border-gray-600 text-primary focus:ring-primary"
                   />
                 </div>
+
+                <div className="flex items-center justify-between p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                  <div>
+                    <label className="text-sm font-medium text-red-400">⚠️ Force Catch-All Without Proxy</label>
+                    <p className="text-xs text-red-400/80">RISKY: May hurt sending IP reputation. Use proxy instead if possible.</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    name="force_catchall_no_proxy"
+                    checked={form.force_catchall_no_proxy || false}
+                    onChange={onChange}
+                    className="w-5 h-5 rounded border-red-600 text-red-500 focus:ring-red-500"
+                  />
+                </div>
               </div>
 
               <button

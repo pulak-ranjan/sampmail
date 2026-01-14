@@ -40,7 +40,8 @@ func (h *ContactHandler) buildVerifierOpts() core.VerifierOptions {
 		opts.ReacherAPIKey = s.ReacherAPIKey
 		opts.ReacherBinPath = s.ReacherBinPath
 		opts.UseReacherOnly = s.UseReacherOnly
-		opts.SkipCatchAllTest = !s.EnableCatchall // If catchall disabled, skip the test
+		opts.SkipCatchAllTest = !s.EnableCatchall          // If catchall disabled, skip the test
+		opts.ForceCatchallNoProxy = s.ForceCatchallNoProxy // RISKY: Allow catch-all without proxy
 
 		// Parse verification IPs (comma or newline separated)
 		if s.VerificationIPs != "" {
