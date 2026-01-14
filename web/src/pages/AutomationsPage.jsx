@@ -1,14 +1,59 @@
 import React, { useState, useEffect } from 'react';
-import { Zap } from 'lucide-react';
-import AutomationBuilder from '../components/AutomationBuilder';
-import { getAuthHeaders } from '../api';
+import {
+    Zap, Plus, Play, Pause, Trash2, Edit2, MoreVertical,
+    Users, Clock, Mail, Tag, Link2, FileText, Globe,
+    ChevronRight, Search, Filter, X, CheckCircle, AlertCircle,
+    Loader2, ArrowLeft, Settings, Copy
+} from 'lucide-react';
+import { cn } from '../lib/utils';
 
-const AutomationsPage = () => {
+const API_BASE = "/api";
+
+async function apiRequest(endpoint, options = {}) {
+    const token = localStorage.getItem("sampmail_token");
+    const res = await fetch(`${API_BASE}${endpoint}`, {
+        ...options,
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: token ? `Bearer ${token}` : "",
+            ...options.headers,
+        },
+        body: options.body ? JSON.stringify(options.body) : undefined,
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Request failed");
+    }
+    return res.json();
+}
+
+const triggerIcons = {
+    trigger_contact_added: Users,
+    trigger_tag_added: Tag,
+    trigger_email_opened: Mail,
+    trigger_link_clicked: Link2,
+    trigger_form_submitted: FileText,
+    trigger_webhook: Globe,
+};
+
+const triggerLabels = {
+    trigger_contact_added: 'Contact Added',
+    trigger_tag_added: 'Tag Added',
+    trigger_email_opened: 'Email Opened',
+    trigger_link_clicked: 'Link Clicked',
+    trigger_form_submitted: 'Form Submitted',
+    trigger_webhook: 'Webhook',
+};
+
+export default function AutomationsPage() {
     const [automations, setAutomations] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [selectedAutomation, setSelectedAutomation] = useState(null);
-    const [showBuilder, setShowBuilder] = useState(false);
+    const [error, setError] = useState(null);
     const [showCreate, setShowCreate] = useState(false);
+    const [selectedAutomation, setSelectedAutomation] = useState(null);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filterStatus, setFilterStatus] = useState('all');
+    const [actionMenuId, setActionMenuId] = useState(null);
 
     useEffect(() => {
         fetchAutomations();
@@ -16,265 +61,415 @@ const AutomationsPage = () => {
 
     const fetchAutomations = async () => {
         try {
-            const res = await fetch('/api/v2/automations', {
-                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
-            });
-            const data = await res.json();
+            setLoading(true);
+            const data = await apiRequest('/v2/automations');
             setAutomations(data || []);
-        } catch (error) {
-            console.error('Failed to fetch automations:', error);
+        } catch (err) {
+            setError(err.message);
         } finally {
             setLoading(false);
         }
     };
 
-    const createAutomation = async (data) => {
+    const createAutomation = async (formData) => {
         try {
-            const res = await fetch('/api/v2/automations', {
+            const automation = await apiRequest('/v2/automations', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('sampmail_token')}`,
-                },
-                body: JSON.stringify(data),
+                body: formData,
             });
-            const automation = await res.json();
             setAutomations([automation, ...automations]);
             setShowCreate(false);
             setSelectedAutomation(automation);
-            setShowBuilder(true);
-        } catch (error) {
-            console.error('Failed to create automation:', error);
+        } catch (err) {
+            setError(err.message);
         }
     };
 
-    const saveAutomation = async (data) => {
+    const toggleAutomation = async (id, activate) => {
         try {
-            await fetch(`/api/v2/automations/${selectedAutomation.id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('sampmail_token')}`,
-                },
-                body: JSON.stringify({ ...selectedAutomation, ...data }),
-            });
-            fetchAutomations();
-        } catch (error) {
-            console.error('Failed to save automation:', error);
-        }
-    };
-
-    const toggleAutomation = async (id, active) => {
-        try {
-            await fetch(`/api/v2/automations/${id}/${active ? 'activate' : 'pause'}`, {
+            await apiRequest(`/v2/automations/${id}/${activate ? 'activate' : 'pause'}`, {
                 method: 'POST',
-                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
             });
-            fetchAutomations();
-        } catch (error) {
-            console.error('Failed to toggle automation:', error);
+            setAutomations(automations.map(a =>
+                a.id === id ? { ...a, status: activate ? 'active' : 'paused' } : a
+            ));
+        } catch (err) {
+            setError(err.message);
         }
     };
 
     const deleteAutomation = async (id) => {
-        if (!confirm('Delete this automation?')) return;
+        if (!confirm('Are you sure you want to delete this automation?')) return;
         try {
-            await fetch(`/api/v2/automations/${id}`, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
-            });
+            await apiRequest(`/v2/automations/${id}`, { method: 'DELETE' });
             setAutomations(automations.filter(a => a.id !== id));
-        } catch (error) {
-            console.error('Failed to delete automation:', error);
+            setActionMenuId(null);
+        } catch (err) {
+            setError(err.message);
         }
     };
 
-    if (showBuilder && selectedAutomation) {
-        return (
-            <div className="h-screen">
-                <div className="bg-gray-800 px-4 py-2 flex items-center justify-between">
-                    <button
-                        onClick={() => setShowBuilder(false)}
-                        className="text-gray-300 hover:text-white"
-                    >
-                        ← Back to Automations
-                    </button>
-                    <h2 className="text-white font-medium">{selectedAutomation.name}</h2>
-                    <div></div>
-                </div>
-                <AutomationBuilder
-                    automation={selectedAutomation}
-                    onSave={saveAutomation}
-                    onActivate={() => toggleAutomation(selectedAutomation.id, true)}
-                    onPause={() => toggleAutomation(selectedAutomation.id, false)}
-                />
-            </div>
-        );
-    }
+    const duplicateAutomation = async (automation) => {
+        try {
+            const newAuto = await apiRequest('/v2/automations', {
+                method: 'POST',
+                body: {
+                    name: `${automation.name} (Copy)`,
+                    description: automation.description,
+                    trigger_type: automation.trigger_type,
+                    steps: automation.steps,
+                },
+            });
+            setAutomations([newAuto, ...automations]);
+            setActionMenuId(null);
+        } catch (err) {
+            setError(err.message);
+        }
+    };
 
-    if (loading) {
+    const filteredAutomations = automations.filter(a => {
+        const matchesSearch = a.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            a.description?.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesFilter = filterStatus === 'all' || a.status === filterStatus;
+        return matchesSearch && matchesFilter;
+    });
+
+    // Detail View
+    if (selectedAutomation) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            </div>
+            <AutomationDetail
+                automation={selectedAutomation}
+                onBack={() => setSelectedAutomation(null)}
+                onSave={async (data) => {
+                    await apiRequest(`/v2/automations/${selectedAutomation.id}`, {
+                        method: 'PUT',
+                        body: data,
+                    });
+                    fetchAutomations();
+                }}
+                onToggle={(activate) => toggleAutomation(selectedAutomation.id, activate)}
+            />
         );
     }
 
     return (
-        <div className="p-6">
-            <div className="flex items-center justify-between mb-6">
+        <div className="space-y-6 pb-20 md:pb-6">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Automations</h1>
-                    <p className="text-gray-500">Create automated email workflows</p>
+                    <h1 className="text-2xl md:text-3xl font-bold text-foreground">Automations</h1>
+                    <p className="text-muted-foreground text-sm md:text-base">Create automated email workflows</p>
                 </div>
                 <button
                     onClick={() => setShowCreate(true)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
                 >
-                    + New Automation
+                    <Plus className="w-5 h-5" />
+                    <span>New Automation</span>
                 </button>
             </div>
 
-            {automations.length === 0 ? (
-                <div className="bg-white dark:bg-gray-800 rounded-xl p-12 text-center">
-                    <div className="flex justify-center mb-4"><Zap className="w-16 h-16 text-gray-400" /></div>
-                    <h3 className="text-xl font-semibold mb-2 dark:text-white">No automations yet</h3>
-                    <p className="text-gray-500 mb-4">Create your first automation workflow</p>
-                    <button
-                        onClick={() => setShowCreate(true)}
-                        className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                    >
-                        Create Automation
-                    </button>
-                </div>
-            ) : (
-                <div className="grid gap-4">
-                    {automations.map((automation) => (
-                        <div
-                            key={automation.id}
-                            className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow flex items-center justify-between"
-                        >
-                            <div>
-                                <h3 className="font-semibold text-gray-900 dark:text-white">{automation.name}</h3>
-                                <p className="text-sm text-gray-500">{automation.description || 'No description'}</p>
-                                <div className="flex items-center gap-4 mt-2 text-sm">
-                                    <span className={`px-2 py-0.5 rounded ${automation.status === 'active' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-600'}`}>
-                                        {automation.status || 'draft'}
-                                    </span>
-                                    <span className="text-gray-400">
-                                        {automation.entry_count || 0} enrollments
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <button
-                                    onClick={() => {
-                                        setSelectedAutomation(automation);
-                                        setShowBuilder(true);
-                                    }}
-                                    className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200"
-                                >
-                                    Edit
-                                </button>
-                                {automation.status === 'active' ? (
-                                    <button
-                                        onClick={() => toggleAutomation(automation.id, false)}
-                                        className="px-4 py-2 bg-yellow-100 text-yellow-600 rounded hover:bg-yellow-200"
-                                    >
-                                        Pause
-                                    </button>
-                                ) : (
-                                    <button
-                                        onClick={() => toggleAutomation(automation.id, true)}
-                                        className="px-4 py-2 bg-green-100 text-green-600 rounded hover:bg-green-200"
-                                    >
-                                        Activate
-                                    </button>
-                                )}
-                                <button
-                                    onClick={() => deleteAutomation(automation.id)}
-                                    className="px-4 py-2 bg-red-100 text-red-600 rounded hover:bg-red-200"
-                                >
-                                    Delete
-                                </button>
-                            </div>
-                        </div>
-                    ))}
+            {/* Error Banner */}
+            {error && (
+                <div className="p-4 bg-red-500/10 text-red-400 rounded-lg border border-red-500/20 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <AlertCircle className="w-5 h-5" />
+                        {error}
+                    </div>
+                    <button onClick={() => setError(null)}><X className="w-4 h-4" /></button>
                 </div>
             )}
 
+            {/* Search & Filter */}
+            <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input
+                        type="text"
+                        placeholder="Search automations..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2.5 bg-card border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary focus:outline-none"
+                    />
+                </div>
+                <div className="flex gap-2">
+                    {['all', 'active', 'paused', 'draft'].map(status => (
+                        <button
+                            key={status}
+                            onClick={() => setFilterStatus(status)}
+                            className={cn(
+                                "px-3 py-2 rounded-lg text-sm font-medium transition-colors capitalize",
+                                filterStatus === status
+                                    ? "bg-primary text-primary-foreground"
+                                    : "bg-card border border-border text-muted-foreground hover:text-foreground"
+                            )}
+                        >
+                            {status}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Loading */}
+            {loading && (
+                <div className="flex items-center justify-center py-20">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                </div>
+            )}
+
+            {/* Empty State */}
+            {!loading && automations.length === 0 && (
+                <div className="bg-card border border-border rounded-xl p-8 md:p-12 text-center">
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Zap className="w-8 h-8 text-primary" />
+                    </div>
+                    <h3 className="text-xl font-semibold mb-2">No automations yet</h3>
+                    <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                        Automations help you send the right email at the right time, automatically.
+                    </p>
+                    <button
+                        onClick={() => setShowCreate(true)}
+                        className="px-6 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
+                    >
+                        <Plus className="w-5 h-5 inline mr-2" />
+                        Create Your First Automation
+                    </button>
+                </div>
+            )}
+
+            {/* Automations List - Card Grid */}
+            {!loading && filteredAutomations.length > 0 && (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {filteredAutomations.map((automation) => {
+                        const TriggerIcon = triggerIcons[automation.trigger_type] || Zap;
+                        const isActive = automation.status === 'active';
+
+                        return (
+                            <div
+                                key={automation.id}
+                                className={cn(
+                                    "bg-card border rounded-xl p-4 md:p-5 relative group cursor-pointer transition-all hover:border-primary/50",
+                                    isActive ? "border-green-500/30" : "border-border"
+                                )}
+                                onClick={() => setSelectedAutomation(automation)}
+                            >
+                                {/* Status Indicator */}
+                                <div className={cn(
+                                    "absolute top-4 right-4 w-2.5 h-2.5 rounded-full",
+                                    isActive ? "bg-green-500" : automation.status === 'paused' ? "bg-yellow-500" : "bg-muted"
+                                )} />
+
+                                {/* Icon & Name */}
+                                <div className="flex items-start gap-3 mb-3">
+                                    <div className={cn(
+                                        "w-10 h-10 rounded-lg flex items-center justify-center shrink-0",
+                                        isActive ? "bg-green-500/10" : "bg-muted"
+                                    )}>
+                                        <TriggerIcon className={cn(
+                                            "w-5 h-5",
+                                            isActive ? "text-green-500" : "text-muted-foreground"
+                                        )} />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <h3 className="font-semibold text-foreground truncate pr-6">{automation.name}</h3>
+                                        <p className="text-sm text-muted-foreground truncate">
+                                            {automation.description || triggerLabels[automation.trigger_type] || 'No trigger'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Stats */}
+                                <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
+                                    <span className="flex items-center gap-1">
+                                        <Users className="w-4 h-4" />
+                                        {automation.entry_count || 0}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                        <Mail className="w-4 h-4" />
+                                        {automation.steps?.length || 0} steps
+                                    </span>
+                                </div>
+
+                                {/* Actions */}
+                                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                    <button
+                                        onClick={() => toggleAutomation(automation.id, !isActive)}
+                                        className={cn(
+                                            "flex-1 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5",
+                                            isActive
+                                                ? "bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20"
+                                                : "bg-green-500/10 text-green-500 hover:bg-green-500/20"
+                                        )}
+                                    >
+                                        {isActive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                                        {isActive ? 'Pause' : 'Activate'}
+                                    </button>
+                                    <button
+                                        onClick={() => setSelectedAutomation(automation)}
+                                        className="p-2 rounded-lg bg-muted hover:bg-muted/80 transition-colors"
+                                    >
+                                        <Edit2 className="w-4 h-4" />
+                                    </button>
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => setActionMenuId(actionMenuId === automation.id ? null : automation.id)}
+                                            className="p-2 rounded-lg bg-muted hover:bg-muted/80 transition-colors"
+                                        >
+                                            <MoreVertical className="w-4 h-4" />
+                                        </button>
+                                        {actionMenuId === automation.id && (
+                                            <div className="absolute right-0 top-full mt-1 w-40 bg-card border border-border rounded-lg shadow-lg z-10 py-1">
+                                                <button
+                                                    onClick={() => duplicateAutomation(automation)}
+                                                    className="w-full px-4 py-2 text-left text-sm hover:bg-muted flex items-center gap-2"
+                                                >
+                                                    <Copy className="w-4 h-4" /> Duplicate
+                                                </button>
+                                                <button
+                                                    onClick={() => deleteAutomation(automation.id)}
+                                                    className="w-full px-4 py-2 text-left text-sm text-red-500 hover:bg-red-500/10 flex items-center gap-2"
+                                                >
+                                                    <Trash2 className="w-4 h-4" /> Delete
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Create Modal */}
             {showCreate && (
                 <CreateAutomationModal
                     onClose={() => setShowCreate(false)}
                     onCreate={createAutomation}
                 />
             )}
+
+            {/* Click outside to close menu */}
+            {actionMenuId && (
+                <div className="fixed inset-0 z-0" onClick={() => setActionMenuId(null)} />
+            )}
         </div>
     );
-};
+}
 
-const CreateAutomationModal = ({ onClose, onCreate }) => {
+// Create Automation Modal
+function CreateAutomationModal({ onClose, onCreate }) {
     const [form, setForm] = useState({
         name: '',
         description: '',
         trigger_type: 'trigger_contact_added',
     });
+    const [loading, setLoading] = useState(false);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        onCreate(form);
+        setLoading(true);
+        await onCreate(form);
+        setLoading(false);
     };
 
+    const triggers = [
+        { value: 'trigger_contact_added', label: 'Contact Added to List', icon: Users, desc: 'When a contact joins a list' },
+        { value: 'trigger_tag_added', label: 'Tag Added', icon: Tag, desc: 'When a tag is applied' },
+        { value: 'trigger_email_opened', label: 'Email Opened', icon: Mail, desc: 'When an email is opened' },
+        { value: 'trigger_link_clicked', label: 'Link Clicked', icon: Link2, desc: 'When a link is clicked' },
+        { value: 'trigger_form_submitted', label: 'Form Submitted', icon: FileText, desc: 'When a form is submitted' },
+        { value: 'trigger_webhook', label: 'Webhook', icon: Globe, desc: 'Triggered by external webhook' },
+    ];
+
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md">
-                <h2 className="text-xl font-bold mb-4 dark:text-white">Create Automation</h2>
-                <form onSubmit={handleSubmit}>
-                    <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+        <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+            <div className="bg-card rounded-t-2xl sm:rounded-xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto">
+                {/* Header */}
+                <div className="sticky top-0 bg-card border-b border-border px-4 sm:px-6 py-4 flex items-center justify-between">
+                    <h2 className="text-lg font-semibold">Create Automation</h2>
+                    <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-5">
+                    {/* Name */}
+                    <div>
+                        <label className="block text-sm font-medium mb-1.5">Automation Name</label>
                         <input
                             type="text"
                             value={form.name}
                             onChange={(e) => setForm({ ...form, name: e.target.value })}
-                            className="w-full border dark:border-gray-600 rounded-lg p-2 dark:bg-gray-700 dark:text-white"
+                            className="w-full h-11 rounded-lg border border-border bg-background px-3 text-sm focus:ring-2 focus:ring-primary focus:outline-none"
                             placeholder="e.g., Welcome Series"
                             required
                         />
                     </div>
-                    <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+
+                    {/* Description */}
+                    <div>
+                        <label className="block text-sm font-medium mb-1.5">Description (optional)</label>
                         <textarea
                             value={form.description}
                             onChange={(e) => setForm({ ...form, description: e.target.value })}
-                            className="w-full border dark:border-gray-600 rounded-lg p-2 dark:bg-gray-700 dark:text-white"
-                            rows={3}
-                            placeholder="Optional description"
+                            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:outline-none resize-none"
+                            rows={2}
+                            placeholder="What does this automation do?"
                         />
                     </div>
-                    <div className="mb-6">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trigger</label>
-                        <select
-                            value={form.trigger_type}
-                            onChange={(e) => setForm({ ...form, trigger_type: e.target.value })}
-                            className="w-full border dark:border-gray-600 rounded-lg p-2 dark:bg-gray-700 dark:text-white"
-                        >
-                            <option value="trigger_contact_added">Contact Added to List</option>
-                            <option value="trigger_tag_added">Tag Added</option>
-                            <option value="trigger_email_opened">Email Opened</option>
-                            <option value="trigger_link_clicked">Link Clicked</option>
-                            <option value="trigger_form_submitted">Form Submitted</option>
-                            <option value="trigger_webhook">Webhook</option>
-                        </select>
+
+                    {/* Trigger Selection */}
+                    <div>
+                        <label className="block text-sm font-medium mb-2">Start Trigger</label>
+                        <div className="grid gap-2">
+                            {triggers.map((trigger) => {
+                                const Icon = trigger.icon;
+                                const isSelected = form.trigger_type === trigger.value;
+                                return (
+                                    <button
+                                        key={trigger.value}
+                                        type="button"
+                                        onClick={() => setForm({ ...form, trigger_type: trigger.value })}
+                                        className={cn(
+                                            "flex items-center gap-3 p-3 rounded-lg border text-left transition-all",
+                                            isSelected
+                                                ? "border-primary bg-primary/5"
+                                                : "border-border hover:border-muted-foreground/50"
+                                        )}
+                                    >
+                                        <div className={cn(
+                                            "w-10 h-10 rounded-lg flex items-center justify-center shrink-0",
+                                            isSelected ? "bg-primary/10" : "bg-muted"
+                                        )}>
+                                            <Icon className={cn("w-5 h-5", isSelected ? "text-primary" : "text-muted-foreground")} />
+                                        </div>
+                                        <div>
+                                            <div className={cn("font-medium text-sm", isSelected && "text-primary")}>{trigger.label}</div>
+                                            <div className="text-xs text-muted-foreground">{trigger.desc}</div>
+                                        </div>
+                                        {isSelected && <CheckCircle className="w-5 h-5 text-primary ml-auto" />}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
-                    <div className="flex justify-end gap-3">
-                        <button type="button" onClick={onClose} className="px-4 py-2 text-gray-600 hover:text-gray-800">
+
+                    {/* Actions */}
+                    <div className="flex gap-3 pt-2">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="flex-1 py-3 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
+                        >
                             Cancel
                         </button>
                         <button
                             type="submit"
-                            disabled={!form.name}
-                            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                            disabled={!form.name || loading}
+                            className="flex-1 py-3 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                         >
+                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                             Create
                         </button>
                     </div>
@@ -282,7 +477,187 @@ const CreateAutomationModal = ({ onClose, onCreate }) => {
             </div>
         </div>
     );
-};
+}
 
-export default AutomationsPage;
+// Automation Detail View (simplified builder)
+function AutomationDetail({ automation, onBack, onSave, onToggle }) {
+    const [name, setName] = useState(automation.name);
+    const [description, setDescription] = useState(automation.description || '');
+    const [saving, setSaving] = useState(false);
 
+    const isActive = automation.status === 'active';
+    const TriggerIcon = triggerIcons[automation.trigger_type] || Zap;
+
+    const handleSave = async () => {
+        setSaving(true);
+        await onSave({ ...automation, name, description });
+        setSaving(false);
+    };
+
+    return (
+        <div className="space-y-6 pb-20 md:pb-6">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <button
+                    onClick={onBack}
+                    className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors w-fit"
+                >
+                    <ArrowLeft className="w-5 h-5" />
+                    <span>Back</span>
+                </button>
+                <div className="flex-1" />
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={handleSave}
+                        disabled={saving}
+                        className="px-4 py-2 bg-muted hover:bg-muted/80 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+                    >
+                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Settings className="w-4 h-4" />}
+                        Save
+                    </button>
+                    <button
+                        onClick={() => onToggle(!isActive)}
+                        className={cn(
+                            "px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors",
+                            isActive
+                                ? "bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20"
+                                : "bg-green-500/10 text-green-500 hover:bg-green-500/20"
+                        )}
+                    >
+                        {isActive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                        {isActive ? 'Pause' : 'Activate'}
+                    </button>
+                </div>
+            </div>
+
+            {/* Main Content */}
+            <div className="grid lg:grid-cols-3 gap-6">
+                {/* Settings Panel */}
+                <div className="lg:col-span-1 space-y-4">
+                    <div className="bg-card border border-border rounded-xl p-5">
+                        <h3 className="font-semibold mb-4">Settings</h3>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium mb-1.5">Name</label>
+                                <input
+                                    type="text"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:ring-2 focus:ring-primary focus:outline-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1.5">Description</label>
+                                <textarea
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:outline-none resize-none"
+                                    rows={3}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Trigger Info */}
+                    <div className="bg-card border border-border rounded-xl p-5">
+                        <h3 className="font-semibold mb-4">Trigger</h3>
+                        <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                                <TriggerIcon className="w-5 h-5 text-primary" />
+                            </div>
+                            <div>
+                                <div className="font-medium text-sm">{triggerLabels[automation.trigger_type]}</div>
+                                <div className="text-xs text-muted-foreground">Starts the workflow</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Stats */}
+                    <div className="bg-card border border-border rounded-xl p-5">
+                        <h3 className="font-semibold mb-4">Statistics</h3>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="text-center p-3 bg-muted rounded-lg">
+                                <div className="text-2xl font-bold">{automation.entry_count || 0}</div>
+                                <div className="text-xs text-muted-foreground">Enrolled</div>
+                            </div>
+                            <div className="text-center p-3 bg-muted rounded-lg">
+                                <div className="text-2xl font-bold">{automation.completed_count || 0}</div>
+                                <div className="text-xs text-muted-foreground">Completed</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Workflow Steps (Placeholder) */}
+                <div className="lg:col-span-2">
+                    <div className="bg-card border border-border rounded-xl p-5 min-h-[400px]">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-semibold">Workflow Steps</h3>
+                            <button className="text-sm text-primary hover:underline flex items-center gap-1">
+                                <Plus className="w-4 h-4" />
+                                Add Step
+                            </button>
+                        </div>
+
+                        {(!automation.steps || automation.steps.length === 0) ? (
+                            <div className="flex flex-col items-center justify-center py-16 text-center">
+                                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                                    <Mail className="w-8 h-8 text-muted-foreground" />
+                                </div>
+                                <h4 className="font-medium mb-2">No steps yet</h4>
+                                <p className="text-sm text-muted-foreground mb-4 max-w-sm">
+                                    Add actions like sending emails, waiting, or adding tags to build your workflow.
+                                </p>
+                                <button className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium">
+                                    <Plus className="w-4 h-4 inline mr-1" />
+                                    Add First Step
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {/* Trigger */}
+                                <div className="flex items-center gap-3 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                                    <div className="w-8 h-8 rounded bg-green-500/20 flex items-center justify-center">
+                                        <TriggerIcon className="w-4 h-4 text-green-500" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="font-medium text-sm text-green-500">Start: {triggerLabels[automation.trigger_type]}</div>
+                                    </div>
+                                </div>
+
+                                {/* Connector */}
+                                <div className="flex justify-center">
+                                    <div className="w-0.5 h-6 bg-border" />
+                                </div>
+
+                                {/* Steps */}
+                                {automation.steps?.map((step, index) => (
+                                    <React.Fragment key={step.id || index}>
+                                        <div className="flex items-center gap-3 p-3 bg-muted rounded-lg group">
+                                            <div className="w-8 h-8 rounded bg-primary/20 flex items-center justify-center">
+                                                <Mail className="w-4 h-4 text-primary" />
+                                            </div>
+                                            <div className="flex-1">
+                                                <div className="font-medium text-sm">{step.name || step.type}</div>
+                                                <div className="text-xs text-muted-foreground">{step.description || 'Configure this step'}</div>
+                                            </div>
+                                            <button className="p-1.5 rounded hover:bg-background opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <Edit2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                        {index < automation.steps.length - 1 && (
+                                            <div className="flex justify-center">
+                                                <div className="w-0.5 h-6 bg-border" />
+                                            </div>
+                                        )}
+                                    </React.Fragment>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
