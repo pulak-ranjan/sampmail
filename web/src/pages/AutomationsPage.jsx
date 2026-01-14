@@ -479,19 +479,65 @@ function CreateAutomationModal({ onClose, onCreate }) {
     );
 }
 
-// Automation Detail View (simplified builder)
+// Automation Detail View with working step selector
 function AutomationDetail({ automation, onBack, onSave, onToggle }) {
     const [name, setName] = useState(automation.name);
     const [description, setDescription] = useState(automation.description || '');
+    const [steps, setSteps] = useState(automation.steps || []);
     const [saving, setSaving] = useState(false);
+    const [showAddStep, setShowAddStep] = useState(false);
+    const [editingStep, setEditingStep] = useState(null);
 
     const isActive = automation.status === 'active';
     const TriggerIcon = triggerIcons[automation.trigger_type] || Zap;
 
     const handleSave = async () => {
         setSaving(true);
-        await onSave({ ...automation, name, description });
+        await onSave({ ...automation, name, description, steps });
         setSaving(false);
+    };
+
+    const addStep = (stepType) => {
+        const newStep = {
+            id: `step_${Date.now()}`,
+            type: stepType.type,
+            name: stepType.label,
+            config: stepType.defaultConfig || {},
+            order: steps.length + 1,
+        };
+        setSteps([...steps, newStep]);
+        setShowAddStep(false);
+        setEditingStep(newStep);
+    };
+
+    const updateStep = (stepId, updates) => {
+        setSteps(steps.map(s => s.id === stepId ? { ...s, ...updates } : s));
+        setEditingStep(null);
+    };
+
+    const deleteStep = (stepId) => {
+        if (confirm('Delete this step?')) {
+            setSteps(steps.filter(s => s.id !== stepId));
+        }
+    };
+
+    const stepTypes = [
+        { type: 'send_email', label: 'Send Email', icon: Mail, color: 'bg-blue-500', desc: 'Send an email to the contact', defaultConfig: { subject: '', template_id: null } },
+        { type: 'wait', label: 'Wait', icon: Clock, color: 'bg-yellow-500', desc: 'Wait for a period of time', defaultConfig: { duration: 1, unit: 'days' } },
+        { type: 'add_tag', label: 'Add Tag', icon: Tag, color: 'bg-green-500', desc: 'Add a tag to the contact', defaultConfig: { tag_id: null } },
+        { type: 'remove_tag', label: 'Remove Tag', icon: Tag, color: 'bg-red-500', desc: 'Remove a tag from the contact', defaultConfig: { tag_id: null } },
+        { type: 'update_field', label: 'Update Field', icon: Edit2, color: 'bg-purple-500', desc: 'Update a contact field', defaultConfig: { field: '', value: '' } },
+        { type: 'webhook', label: 'Webhook', icon: Globe, color: 'bg-orange-500', desc: 'Call an external URL', defaultConfig: { url: '', method: 'POST' } },
+    ];
+
+    const getStepIcon = (type) => {
+        const stepType = stepTypes.find(s => s.type === type);
+        return stepType?.icon || Zap;
+    };
+
+    const getStepColor = (type) => {
+        const stepType = stepTypes.find(s => s.type === type);
+        return stepType?.color || 'bg-muted';
     };
 
     return (
@@ -510,7 +556,7 @@ function AutomationDetail({ automation, onBack, onSave, onToggle }) {
                     <button
                         onClick={handleSave}
                         disabled={saving}
-                        className="px-4 py-2 bg-muted hover:bg-muted/80 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+                        className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium flex items-center gap-2 transition-colors hover:bg-primary/90"
                     >
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Settings className="w-4 h-4" />}
                         Save
@@ -589,18 +635,21 @@ function AutomationDetail({ automation, onBack, onSave, onToggle }) {
                     </div>
                 </div>
 
-                {/* Workflow Steps (Placeholder) */}
+                {/* Workflow Steps */}
                 <div className="lg:col-span-2">
                     <div className="bg-card border border-border rounded-xl p-5 min-h-[400px]">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-semibold">Workflow Steps</h3>
-                            <button className="text-sm text-primary hover:underline flex items-center gap-1">
+                            <h3 className="font-semibold">Workflow Steps ({steps.length})</h3>
+                            <button
+                                onClick={() => setShowAddStep(true)}
+                                className="text-sm text-primary hover:underline flex items-center gap-1"
+                            >
                                 <Plus className="w-4 h-4" />
                                 Add Step
                             </button>
                         </div>
 
-                        {(!automation.steps || automation.steps.length === 0) ? (
+                        {steps.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-16 text-center">
                                 <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
                                     <Mail className="w-8 h-8 text-muted-foreground" />
@@ -609,7 +658,10 @@ function AutomationDetail({ automation, onBack, onSave, onToggle }) {
                                 <p className="text-sm text-muted-foreground mb-4 max-w-sm">
                                     Add actions like sending emails, waiting, or adding tags to build your workflow.
                                 </p>
-                                <button className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium">
+                                <button
+                                    onClick={() => setShowAddStep(true)}
+                                    className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium"
+                                >
                                     <Plus className="w-4 h-4 inline mr-1" />
                                     Add First Step
                                 </button>
@@ -632,30 +684,250 @@ function AutomationDetail({ automation, onBack, onSave, onToggle }) {
                                 </div>
 
                                 {/* Steps */}
-                                {automation.steps?.map((step, index) => (
-                                    <React.Fragment key={step.id || index}>
-                                        <div className="flex items-center gap-3 p-3 bg-muted rounded-lg group">
-                                            <div className="w-8 h-8 rounded bg-primary/20 flex items-center justify-center">
-                                                <Mail className="w-4 h-4 text-primary" />
+                                {steps.map((step, index) => {
+                                    const StepIcon = getStepIcon(step.type);
+                                    return (
+                                        <React.Fragment key={step.id || index}>
+                                            <div className="flex items-center gap-3 p-3 bg-muted rounded-lg group">
+                                                <div className={cn("w-8 h-8 rounded flex items-center justify-center", getStepColor(step.type) + '/20')}>
+                                                    <StepIcon className={cn("w-4 h-4", getStepColor(step.type).replace('bg-', 'text-'))} />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="font-medium text-sm">{step.name || step.type}</div>
+                                                    <div className="text-xs text-muted-foreground truncate">
+                                                        {step.config?.subject || step.config?.duration ? `${step.config.duration} ${step.config.unit}` : 'Click to configure'}
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => setEditingStep(step)}
+                                                    className="p-1.5 rounded hover:bg-background transition-opacity"
+                                                >
+                                                    <Edit2 className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => deleteStep(step.id)}
+                                                    className="p-1.5 rounded hover:bg-red-500/10 text-red-500 transition-opacity"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
                                             </div>
-                                            <div className="flex-1">
-                                                <div className="font-medium text-sm">{step.name || step.type}</div>
-                                                <div className="text-xs text-muted-foreground">{step.description || 'Configure this step'}</div>
-                                            </div>
-                                            <button className="p-1.5 rounded hover:bg-background opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <Edit2 className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                        {index < automation.steps.length - 1 && (
-                                            <div className="flex justify-center">
-                                                <div className="w-0.5 h-6 bg-border" />
-                                            </div>
-                                        )}
-                                    </React.Fragment>
-                                ))}
+                                            {index < steps.length - 1 && (
+                                                <div className="flex justify-center">
+                                                    <div className="w-0.5 h-6 bg-border" />
+                                                </div>
+                                            )}
+                                        </React.Fragment>
+                                    );
+                                })}
+
+                                {/* Add more steps */}
+                                <div className="flex justify-center">
+                                    <div className="w-0.5 h-6 bg-border" />
+                                </div>
+                                <button
+                                    onClick={() => setShowAddStep(true)}
+                                    className="w-full p-3 border-2 border-dashed border-border rounded-lg text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    Add Step
+                                </button>
                             </div>
                         )}
                     </div>
+                </div>
+            </div>
+
+            {/* Add Step Modal */}
+            {showAddStep && (
+                <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                    <div className="bg-card rounded-t-2xl sm:rounded-xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto">
+                        <div className="sticky top-0 bg-card border-b border-border px-4 sm:px-6 py-4 flex items-center justify-between">
+                            <h2 className="text-lg font-semibold">Add Step</h2>
+                            <button onClick={() => setShowAddStep(false)} className="p-2 rounded-lg hover:bg-muted">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-4 sm:p-6 space-y-2">
+                            {stepTypes.map((stepType) => {
+                                const Icon = stepType.icon;
+                                return (
+                                    <button
+                                        key={stepType.type}
+                                        onClick={() => addStep(stepType)}
+                                        className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary hover:bg-primary/5 transition-all text-left"
+                                    >
+                                        <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", stepType.color + '/20')}>
+                                            <Icon className={cn("w-5 h-5", stepType.color.replace('bg-', 'text-'))} />
+                                        </div>
+                                        <div>
+                                            <div className="font-medium text-sm">{stepType.label}</div>
+                                            <div className="text-xs text-muted-foreground">{stepType.desc}</div>
+                                        </div>
+                                        <ChevronRight className="w-5 h-5 text-muted-foreground ml-auto" />
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Step Modal */}
+            {editingStep && (
+                <StepEditor
+                    step={editingStep}
+                    onSave={(updates) => updateStep(editingStep.id, updates)}
+                    onClose={() => setEditingStep(null)}
+                />
+            )}
+        </div>
+    );
+}
+
+// Step Editor Modal
+function StepEditor({ step, onSave, onClose }) {
+    const [config, setConfig] = useState(step.config || {});
+
+    const handleSave = () => {
+        onSave({ config });
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+            <div className="bg-card rounded-t-2xl sm:rounded-xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto">
+                <div className="sticky top-0 bg-card border-b border-border px-4 sm:px-6 py-4 flex items-center justify-between">
+                    <h2 className="text-lg font-semibold">Configure: {step.name}</h2>
+                    <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+                <div className="p-4 sm:p-6 space-y-4">
+                    {step.type === 'send_email' && (
+                        <>
+                            <div>
+                                <label className="block text-sm font-medium mb-1.5">Email Subject</label>
+                                <input
+                                    type="text"
+                                    value={config.subject || ''}
+                                    onChange={(e) => setConfig({ ...config, subject: e.target.value })}
+                                    className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:ring-2 focus:ring-primary focus:outline-none"
+                                    placeholder="Enter email subject"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1.5">Template ID</label>
+                                <input
+                                    type="text"
+                                    value={config.template_id || ''}
+                                    onChange={(e) => setConfig({ ...config, template_id: e.target.value })}
+                                    className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:ring-2 focus:ring-primary focus:outline-none"
+                                    placeholder="Enter template ID or leave blank"
+                                />
+                            </div>
+                        </>
+                    )}
+                    {step.type === 'wait' && (
+                        <div className="flex gap-4">
+                            <div className="flex-1">
+                                <label className="block text-sm font-medium mb-1.5">Duration</label>
+                                <input
+                                    type="number"
+                                    value={config.duration || 1}
+                                    onChange={(e) => setConfig({ ...config, duration: parseInt(e.target.value) })}
+                                    className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:ring-2 focus:ring-primary focus:outline-none"
+                                    min={1}
+                                />
+                            </div>
+                            <div className="flex-1">
+                                <label className="block text-sm font-medium mb-1.5">Unit</label>
+                                <select
+                                    value={config.unit || 'days'}
+                                    onChange={(e) => setConfig({ ...config, unit: e.target.value })}
+                                    className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:ring-2 focus:ring-primary focus:outline-none"
+                                >
+                                    <option value="minutes">Minutes</option>
+                                    <option value="hours">Hours</option>
+                                    <option value="days">Days</option>
+                                    <option value="weeks">Weeks</option>
+                                </select>
+                            </div>
+                        </div>
+                    )}
+                    {(step.type === 'add_tag' || step.type === 'remove_tag') && (
+                        <div>
+                            <label className="block text-sm font-medium mb-1.5">Tag Name</label>
+                            <input
+                                type="text"
+                                value={config.tag_name || ''}
+                                onChange={(e) => setConfig({ ...config, tag_name: e.target.value })}
+                                className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:ring-2 focus:ring-primary focus:outline-none"
+                                placeholder="Enter tag name"
+                            />
+                        </div>
+                    )}
+                    {step.type === 'webhook' && (
+                        <>
+                            <div>
+                                <label className="block text-sm font-medium mb-1.5">Webhook URL</label>
+                                <input
+                                    type="url"
+                                    value={config.url || ''}
+                                    onChange={(e) => setConfig({ ...config, url: e.target.value })}
+                                    className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:ring-2 focus:ring-primary focus:outline-none"
+                                    placeholder="https://example.com/webhook"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1.5">Method</label>
+                                <select
+                                    value={config.method || 'POST'}
+                                    onChange={(e) => setConfig({ ...config, method: e.target.value })}
+                                    className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:ring-2 focus:ring-primary focus:outline-none"
+                                >
+                                    <option value="POST">POST</option>
+                                    <option value="GET">GET</option>
+                                </select>
+                            </div>
+                        </>
+                    )}
+                    {step.type === 'update_field' && (
+                        <>
+                            <div>
+                                <label className="block text-sm font-medium mb-1.5">Field Name</label>
+                                <input
+                                    type="text"
+                                    value={config.field || ''}
+                                    onChange={(e) => setConfig({ ...config, field: e.target.value })}
+                                    className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:ring-2 focus:ring-primary focus:outline-none"
+                                    placeholder="e.g., custom_field_1"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1.5">New Value</label>
+                                <input
+                                    type="text"
+                                    value={config.value || ''}
+                                    onChange={(e) => setConfig({ ...config, value: e.target.value })}
+                                    className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:ring-2 focus:ring-primary focus:outline-none"
+                                    placeholder="Value to set"
+                                />
+                            </div>
+                        </>
+                    )}
+                </div>
+                <div className="p-4 sm:p-6 pt-0 flex gap-3">
+                    <button
+                        onClick={onClose}
+                        className="flex-1 py-3 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onClick={handleSave}
+                        className="flex-1 py-3 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+                    >
+                        Save Step
+                    </button>
                 </div>
             </div>
         </div>
