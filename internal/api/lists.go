@@ -255,7 +255,10 @@ func (h *ListHandler) AddSubscriber(w http.ResponseWriter, r *http.Request) {
 		if req.Fields != nil {
 			contact.CustomFields = models.JSONMap(req.Fields)
 		}
-		h.store.DB.Create(&contact)
+		if err := h.store.DB.Create(&contact).Error; err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create contact: " + err.Error()})
+			return
+		}
 	}
 
 	// Check if already in list
