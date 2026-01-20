@@ -22,31 +22,31 @@ import (
 
 // SubscriberList represents a mailing list
 type SubscriberList struct {
-	ID                uint      `gorm:"primaryKey" json:"id"`
-	OrganizationID    uint      `gorm:"index" json:"organization_id"`
-	Name              string    `json:"name"`
-	Description       string    `json:"description"`
-	Type              string    `json:"type"` // static, dynamic
-	DoubleOptin       bool      `json:"double_optin"`
-	WelcomeEmailID    uint      `json:"welcome_email_id"`
-	UnsubscribeEmailID uint     `json:"unsubscribe_email_id"`
-	SubscriberCount   int       `json:"subscriber_count"`
-	ActiveCount       int       `json:"active_count"`
-	UnsubscribedCount int       `json:"unsubscribed_count"`
-	BouncedCount      int       `json:"bounced_count"`
-	CreatedBy         uint      `json:"created_by"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	ID                 uint      `gorm:"primaryKey" json:"id"`
+	OrganizationID     uint      `gorm:"index" json:"organization_id"`
+	Name               string    `json:"name"`
+	Description        string    `json:"description"`
+	Type               string    `json:"type"` // static, dynamic
+	DoubleOptin        bool      `json:"double_optin"`
+	WelcomeEmailID     uint      `json:"welcome_email_id"`
+	UnsubscribeEmailID uint      `json:"unsubscribe_email_id"`
+	SubscriberCount    int       `json:"subscriber_count"`
+	ActiveCount        int       `json:"active_count"`
+	UnsubscribedCount  int       `json:"unsubscribed_count"`
+	BouncedCount       int       `json:"bounced_count"`
+	CreatedBy          uint      `json:"created_by"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 // ListSubscriber represents a subscriber in a list
 type ListSubscriber struct {
-	ID            uint       `gorm:"primaryKey" json:"id"`
-	ListID        uint       `gorm:"index" json:"list_id"`
-	ContactID     uint       `gorm:"index" json:"contact_id"`
-	Status        string     `json:"status"` // active, unsubscribed, bounced, pending
-	Source        string     `json:"source"` // import, api, form, manual
-	SubscribedAt  time.Time  `json:"subscribed_at"`
+	ID             uint       `gorm:"primaryKey" json:"id"`
+	ListID         uint       `gorm:"index" json:"list_id"`
+	ContactID      uint       `gorm:"index" json:"contact_id"`
+	Status         string     `json:"status"` // active, unsubscribed, bounced, pending
+	Source         string     `json:"source"` // import, api, form, manual
+	SubscribedAt   time.Time  `json:"subscribed_at"`
 	UnsubscribedAt *time.Time `json:"unsubscribed_at"`
 }
 
@@ -345,7 +345,7 @@ func (h *ListHandler) UnsubscribeFromList(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]string{"status": "unsubscribed"})
 }
 
-// ImportSubscribers imports subscribers from CSV
+// ImportSubscribers imports subscribers from CSV with optional auto-verify
 func (h *ListHandler) ImportSubscribers(w http.ResponseWriter, r *http.Request) {
 	listID, _ := strconv.Atoi(chi.URLParam(r, "id"))
 
@@ -361,6 +361,9 @@ func (h *ListHandler) ImportSubscribers(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	defer file.Close()
+
+	// Check for auto_verify flag
+	autoVerify := r.FormValue("auto_verify") == "true" || r.FormValue("auto_verify") == "1"
 
 	reader := csv.NewReader(file)
 
@@ -384,6 +387,7 @@ func (h *ListHandler) ImportSubscribers(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var imported, skipped, failed int
+	var emailsToVerify []string
 
 	for {
 		record, err := reader.Read()
@@ -439,6 +443,11 @@ func (h *ListHandler) ImportSubscribers(w http.ResponseWriter, r *http.Request) 
 				SubscribedAt: time.Now(),
 			}
 			h.store.DB.Create(&contact)
+
+			// Track for verification if auto_verify is enabled
+			if autoVerify {
+				emailsToVerify = append(emailsToVerify, email)
+			}
 		}
 
 		// Check if already in list
@@ -468,11 +477,58 @@ func (h *ListHandler) ImportSubscribers(w http.ResponseWriter, r *http.Request) 
 	h.store.DB.Model(&SubscriberList{}).Where("id = ?", listID).
 		UpdateColumn("subscriber_count", h.store.DB.Raw(fmt.Sprintf("subscriber_count + %d", imported)))
 
+	// Trigger background verification if auto_verify was enabled
+	verifyCount := 0
+	if autoVerify && len(emailsToVerify) > 0 {
+		go func(emails []string) {
+			opts := core.VerifierOptions{}
+			// Load settings for verification
+			if s, err := h.store.GetSettings(); err == nil {
+				opts.ReacherURL = s.ReacherURL
+				opts.ReacherAPIKey = s.ReacherAPIKey
+				opts.ReacherBinPath = s.ReacherBinPath
+				opts.UseReacherOnly = s.UseReacherOnly
+			}
+
+			// Verify in batches of 50
+			for i := 0; i < len(emails); i += 50 {
+				end := i + 50
+				if end > len(emails) {
+					end = len(emails)
+				}
+				batch := emails[i:end]
+				results := core.VerifyEmailBatch(batch, opts, 5)
+
+				// Update contact verification status
+				for _, result := range results {
+					status := "unknown"
+					if result.IsReachable == "safe" {
+						status = "valid"
+					} else if result.IsReachable == "invalid" {
+						status = "invalid"
+					} else if result.IsReachable == "risky" {
+						status = "risky"
+					}
+
+					h.store.DB.Model(&models.ContactV2{}).
+						Where("email = ?", result.Input).
+						Updates(map[string]interface{}{
+							"verification_status": status,
+							"verified_at":         time.Now(),
+						})
+				}
+			}
+		}(emailsToVerify)
+		verifyCount = len(emailsToVerify)
+	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"imported": imported,
-		"skipped":  skipped,
-		"failed":   failed,
-		"total":    imported + skipped + failed,
+		"imported":    imported,
+		"skipped":     skipped,
+		"failed":      failed,
+		"total":       imported + skipped + failed,
+		"verifying":   verifyCount,
+		"auto_verify": autoVerify,
 	})
 }
 

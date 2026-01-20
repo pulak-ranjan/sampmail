@@ -625,6 +625,7 @@ const ImportModal = ({ listId, onClose, onComplete }) => {
   const [file, setFile] = useState(null);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState(null);
+  const [autoVerify, setAutoVerify] = useState(true); // Default ON
 
   const handleImport = async () => {
     if (!file) return;
@@ -633,6 +634,7 @@ const ImportModal = ({ listId, onClose, onComplete }) => {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('auto_verify', autoVerify ? 'true' : 'false');
 
       const res = await fetch(`/api/v2/lists/${listId}/import`, {
         method: 'POST',
@@ -663,6 +665,11 @@ const ImportModal = ({ listId, onClose, onComplete }) => {
                 <li>Imported: <span className="font-bold">{result.imported}</span></li>
                 <li>Skipped: <span className="font-bold">{result.skipped}</span></li>
                 <li>Failed: <span className="font-bold">{result.failed}</span></li>
+                {result.verifying > 0 && (
+                  <li className="text-blue-600 dark:text-blue-400">
+                    ✨ Verifying {result.verifying} emails in background...
+                  </li>
+                )}
               </ul>
             </div>
             <button
@@ -674,7 +681,7 @@ const ImportModal = ({ listId, onClose, onComplete }) => {
           </div>
         ) : (
           <>
-            <div className="mb-6">
+            <div className="mb-4">
               <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
                 Upload a CSV file with subscriber data. Required column: <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">email</code>
               </p>
@@ -693,6 +700,25 @@ const ImportModal = ({ listId, onClose, onComplete }) => {
                 </label>
               </div>
             </div>
+
+            {/* Auto-Verify Toggle */}
+            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoVerify}
+                  onChange={(e) => setAutoVerify(e.target.checked)}
+                  className="w-5 h-5 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                />
+                <div>
+                  <span className="font-medium text-blue-800 dark:text-blue-300">Auto-verify emails</span>
+                  <p className="text-xs text-blue-600 dark:text-blue-400">
+                    Automatically verify all imported emails in background
+                  </p>
+                </div>
+              </label>
+            </div>
+
             <div className="flex justify-end gap-3">
               <button
                 onClick={onClose}
