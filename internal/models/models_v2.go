@@ -105,6 +105,40 @@ type ContactV2 struct {
 }
 
 // =====================================
+// SUBSCRIBER LIST MODELS
+// =====================================
+
+// SubscriberList represents a mailing list
+type SubscriberList struct {
+	ID                 uint      `gorm:"primaryKey" json:"id"`
+	OrganizationID     uint      `gorm:"index" json:"organization_id"`
+	Name               string    `json:"name"`
+	Description        string    `json:"description"`
+	Type               string    `json:"type"` // static, dynamic
+	DoubleOptin        bool      `json:"double_optin"`
+	WelcomeEmailID     uint      `json:"welcome_email_id"`
+	UnsubscribeEmailID uint      `json:"unsubscribe_email_id"`
+	SubscriberCount    int       `json:"subscriber_count"`
+	ActiveCount        int       `json:"active_count"`
+	UnsubscribedCount  int       `json:"unsubscribed_count"`
+	BouncedCount       int       `json:"bounced_count"`
+	CreatedBy          uint      `json:"created_by"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+// ListSubscriber represents a subscriber in a list
+type ListSubscriber struct {
+	ID             uint       `gorm:"primaryKey" json:"id"`
+	ListID         uint       `gorm:"index" json:"list_id"`
+	ContactID      uint       `gorm:"index" json:"contact_id"`
+	Status         string     `json:"status"` // active, unsubscribed, bounced, pending
+	Source         string     `json:"source"` // import, api, form, manual
+	SubscribedAt   time.Time  `json:"subscribed_at"`
+	UnsubscribedAt *time.Time `json:"unsubscribed_at"`
+}
+
+// =====================================
 // DRAG & DROP EMAIL TEMPLATE BUILDER
 // =====================================
 

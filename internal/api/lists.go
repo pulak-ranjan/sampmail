@@ -17,41 +17,7 @@ import (
 )
 
 // =====================================
-// SUBSCRIBER LIST MODELS
-// =====================================
-
-// SubscriberList represents a mailing list
-type SubscriberList struct {
-	ID                 uint      `gorm:"primaryKey" json:"id"`
-	OrganizationID     uint      `gorm:"index" json:"organization_id"`
-	Name               string    `json:"name"`
-	Description        string    `json:"description"`
-	Type               string    `json:"type"` // static, dynamic
-	DoubleOptin        bool      `json:"double_optin"`
-	WelcomeEmailID     uint      `json:"welcome_email_id"`
-	UnsubscribeEmailID uint      `json:"unsubscribe_email_id"`
-	SubscriberCount    int       `json:"subscriber_count"`
-	ActiveCount        int       `json:"active_count"`
-	UnsubscribedCount  int       `json:"unsubscribed_count"`
-	BouncedCount       int       `json:"bounced_count"`
-	CreatedBy          uint      `json:"created_by"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
-}
-
-// ListSubscriber represents a subscriber in a list
-type ListSubscriber struct {
-	ID             uint       `gorm:"primaryKey" json:"id"`
-	ListID         uint       `gorm:"index" json:"list_id"`
-	ContactID      uint       `gorm:"index" json:"contact_id"`
-	Status         string     `json:"status"` // active, unsubscribed, bounced, pending
-	Source         string     `json:"source"` // import, api, form, manual
-	SubscribedAt   time.Time  `json:"subscribed_at"`
-	UnsubscribedAt *time.Time `json:"unsubscribed_at"`
-}
-
-// =====================================
-// LIST HANDLER
+// LIST HANDLER (uses models.models.SubscriberList and models.models.ListSubscriber)
 // =====================================
 
 // ListHandler handles subscriber list operations
@@ -66,7 +32,7 @@ func NewListHandler(st *store.Store) *ListHandler {
 
 // ListLists returns all subscriber lists
 func (h *ListHandler) ListLists(w http.ResponseWriter, r *http.Request) {
-	var lists []SubscriberList
+	var lists []models.SubscriberList
 	if err := h.store.DB.Order("created_at DESC").Find(&lists).Error; err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -78,7 +44,7 @@ func (h *ListHandler) ListLists(w http.ResponseWriter, r *http.Request) {
 func (h *ListHandler) GetList(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
 
-	var list SubscriberList
+	var list models.SubscriberList
 	if err := h.store.DB.First(&list, id).Error; err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "list not found"})
 		return
@@ -86,9 +52,9 @@ func (h *ListHandler) GetList(w http.ResponseWriter, r *http.Request) {
 
 	// Get fresh counts
 	var activeCount, unsubCount, bouncedCount int64
-	h.store.DB.Model(&ListSubscriber{}).Where("list_id = ? AND status = ?", id, "active").Count(&activeCount)
-	h.store.DB.Model(&ListSubscriber{}).Where("list_id = ? AND status = ?", id, "unsubscribed").Count(&unsubCount)
-	h.store.DB.Model(&ListSubscriber{}).Where("list_id = ? AND status = ?", id, "bounced").Count(&bouncedCount)
+	h.store.DB.Model(&models.ListSubscriber{}).Where("list_id = ? AND status = ?", id, "active").Count(&activeCount)
+	h.store.DB.Model(&models.ListSubscriber{}).Where("list_id = ? AND status = ?", id, "unsubscribed").Count(&unsubCount)
+	h.store.DB.Model(&models.ListSubscriber{}).Where("list_id = ? AND status = ?", id, "bounced").Count(&bouncedCount)
 
 	list.ActiveCount = int(activeCount)
 	list.UnsubscribedCount = int(unsubCount)
@@ -100,7 +66,7 @@ func (h *ListHandler) GetList(w http.ResponseWriter, r *http.Request) {
 
 // CreateList creates a new subscriber list
 func (h *ListHandler) CreateList(w http.ResponseWriter, r *http.Request) {
-	var list SubscriberList
+	var list models.SubscriberList
 	if err := json.NewDecoder(r.Body).Decode(&list); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 		return
@@ -127,13 +93,13 @@ func (h *ListHandler) CreateList(w http.ResponseWriter, r *http.Request) {
 func (h *ListHandler) UpdateList(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
 
-	var list SubscriberList
+	var list models.SubscriberList
 	if err := h.store.DB.First(&list, id).Error; err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "list not found"})
 		return
 	}
 
-	var updates SubscriberList
+	var updates models.SubscriberList
 	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 		return
@@ -154,9 +120,9 @@ func (h *ListHandler) DeleteList(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
 
 	// Delete subscribers first
-	h.store.DB.Where("list_id = ?", id).Delete(&ListSubscriber{})
+	h.store.DB.Where("list_id = ?", id).Delete(&models.ListSubscriber{})
 
-	if err := h.store.DB.Delete(&SubscriberList{}, id).Error; err != nil {
+	if err := h.store.DB.Delete(&models.SubscriberList{}, id).Error; err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
@@ -186,7 +152,7 @@ func (h *ListHandler) ListSubscribers(w http.ResponseWriter, r *http.Request) {
 	// Join with contacts to get full info
 	query := h.store.DB.Table("list_subscribers ls").
 		Select("ls.*, cv.email, cv.first_name, cv.last_name, cv.company, cv.lead_score").
-		Joins("LEFT JOIN contact_v2s cv ON ls.contact_id = cv.id").
+		Joins("LEFT JOIN contact_v2 cv ON ls.contact_id = cv.id").
 		Where("ls.list_id = ?", listID)
 
 	if status != "" {
@@ -262,7 +228,7 @@ func (h *ListHandler) AddSubscriber(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if already in list
-	var existing ListSubscriber
+	var existing models.ListSubscriber
 	if err := h.store.DB.Where("list_id = ? AND contact_id = ?", listID, contact.ID).First(&existing).Error; err == nil {
 		// Already exists, update status if needed
 		if existing.Status != "active" {
@@ -278,7 +244,7 @@ func (h *ListHandler) AddSubscriber(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add to list
-	subscriber := ListSubscriber{
+	subscriber := models.ListSubscriber{
 		ListID:       uint(listID),
 		ContactID:    contact.ID,
 		Status:       "active",
@@ -295,7 +261,7 @@ func (h *ListHandler) AddSubscriber(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update list count
-	h.store.DB.Model(&SubscriberList{}).Where("id = ?", listID).
+	h.store.DB.Model(&models.SubscriberList{}).Where("id = ?", listID).
 		UpdateColumn("subscriber_count", h.store.DB.Raw("subscriber_count + 1"))
 
 	// Trigger automation
@@ -313,7 +279,7 @@ func (h *ListHandler) RemoveSubscriber(w http.ResponseWriter, r *http.Request) {
 	contactID, _ := strconv.Atoi(chi.URLParam(r, "contactId"))
 
 	result := h.store.DB.Where("list_id = ? AND contact_id = ?", listID, contactID).
-		Delete(&ListSubscriber{})
+		Delete(&models.ListSubscriber{})
 
 	if result.RowsAffected == 0 {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "subscriber not found"})
@@ -321,7 +287,7 @@ func (h *ListHandler) RemoveSubscriber(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update list count
-	h.store.DB.Model(&SubscriberList{}).Where("id = ?", listID).
+	h.store.DB.Model(&models.SubscriberList{}).Where("id = ?", listID).
 		UpdateColumn("subscriber_count", h.store.DB.Raw("subscriber_count - 1"))
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "removed"})
@@ -333,7 +299,7 @@ func (h *ListHandler) UnsubscribeFromList(w http.ResponseWriter, r *http.Request
 	contactID, _ := strconv.Atoi(chi.URLParam(r, "contactId"))
 
 	now := time.Now()
-	result := h.store.DB.Model(&ListSubscriber{}).
+	result := h.store.DB.Model(&models.ListSubscriber{}).
 		Where("list_id = ? AND contact_id = ?", listID, contactID).
 		Updates(map[string]interface{}{
 			"status":          "unsubscribed",
@@ -454,14 +420,14 @@ func (h *ListHandler) ImportSubscribers(w http.ResponseWriter, r *http.Request) 
 		}
 
 		// Check if already in list
-		var existing ListSubscriber
+		var existing models.ListSubscriber
 		if err := h.store.DB.Where("list_id = ? AND contact_id = ?", listID, contact.ID).First(&existing).Error; err == nil {
 			skipped++
 			continue
 		}
 
 		// Add to list
-		subscriber := ListSubscriber{
+		subscriber := models.ListSubscriber{
 			ListID:       uint(listID),
 			ContactID:    contact.ID,
 			Status:       "active",
@@ -477,7 +443,7 @@ func (h *ListHandler) ImportSubscribers(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Update list count
-	h.store.DB.Model(&SubscriberList{}).Where("id = ?", listID).
+	h.store.DB.Model(&models.SubscriberList{}).Where("id = ?", listID).
 		UpdateColumn("subscriber_count", h.store.DB.Raw(fmt.Sprintf("subscriber_count + %d", imported)))
 
 	// Trigger background verification if auto_verify was enabled
@@ -542,7 +508,7 @@ func (h *ListHandler) ExportSubscribers(w http.ResponseWriter, r *http.Request) 
 
 	query := h.store.DB.Table("list_subscribers ls").
 		Select("cv.email, cv.first_name, cv.last_name, cv.company, cv.phone, ls.status, ls.subscribed_at").
-		Joins("LEFT JOIN contact_v2s cv ON ls.contact_id = cv.id").
+		Joins("LEFT JOIN contact_v2 cv ON ls.contact_id = cv.id").
 		Where("ls.list_id = ?", listID)
 
 	if status != "" {
@@ -600,12 +566,12 @@ func (h *ListHandler) CopySubscribers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get source subscribers
-	query := h.store.DB.Model(&ListSubscriber{}).Where("list_id = ?", sourceID)
+	query := h.store.DB.Model(&models.ListSubscriber{}).Where("list_id = ?", sourceID)
 	if req.Status != "" {
 		query = query.Where("status = ?", req.Status)
 	}
 
-	var sourceSubscribers []ListSubscriber
+	var sourceSubscribers []models.ListSubscriber
 	if err := query.Find(&sourceSubscribers).Error; err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -614,13 +580,13 @@ func (h *ListHandler) CopySubscribers(w http.ResponseWriter, r *http.Request) {
 	var copied, skipped int
 	for _, s := range sourceSubscribers {
 		// Check if already in target
-		var existing ListSubscriber
+		var existing models.ListSubscriber
 		if err := h.store.DB.Where("list_id = ? AND contact_id = ?", req.TargetListID, s.ContactID).First(&existing).Error; err == nil {
 			skipped++
 			continue
 		}
 
-		newSub := ListSubscriber{
+		newSub := models.ListSubscriber{
 			ListID:       req.TargetListID,
 			ContactID:    s.ContactID,
 			Status:       "active",
@@ -634,7 +600,7 @@ func (h *ListHandler) CopySubscribers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update target list count
-	h.store.DB.Model(&SubscriberList{}).Where("id = ?", req.TargetListID).
+	h.store.DB.Model(&models.SubscriberList{}).Where("id = ?", req.TargetListID).
 		UpdateColumn("subscriber_count", h.store.DB.Raw(fmt.Sprintf("subscriber_count + %d", copied)))
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -649,10 +615,10 @@ func (h *ListHandler) GetListStats(w http.ResponseWriter, r *http.Request) {
 
 	// Basic counts
 	var activeCount, unsubCount, bouncedCount, pendingCount int64
-	h.store.DB.Model(&ListSubscriber{}).Where("list_id = ? AND status = ?", listID, "active").Count(&activeCount)
-	h.store.DB.Model(&ListSubscriber{}).Where("list_id = ? AND status = ?", listID, "unsubscribed").Count(&unsubCount)
-	h.store.DB.Model(&ListSubscriber{}).Where("list_id = ? AND status = ?", listID, "bounced").Count(&bouncedCount)
-	h.store.DB.Model(&ListSubscriber{}).Where("list_id = ? AND status = ?", listID, "pending").Count(&pendingCount)
+	h.store.DB.Model(&models.ListSubscriber{}).Where("list_id = ? AND status = ?", listID, "active").Count(&activeCount)
+	h.store.DB.Model(&models.ListSubscriber{}).Where("list_id = ? AND status = ?", listID, "unsubscribed").Count(&unsubCount)
+	h.store.DB.Model(&models.ListSubscriber{}).Where("list_id = ? AND status = ?", listID, "bounced").Count(&bouncedCount)
+	h.store.DB.Model(&models.ListSubscriber{}).Where("list_id = ? AND status = ?", listID, "pending").Count(&pendingCount)
 
 	// Growth over time (last 30 days)
 	var growth []struct {

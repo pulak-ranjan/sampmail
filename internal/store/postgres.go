@@ -131,6 +131,8 @@ func MigratePostgres(st *Store) error {
 		&models.Organization{},
 		&models.OrganizationUser{},
 		&models.ContactV2{},
+		&models.SubscriberList{},
+		&models.ListSubscriber{},
 		&models.EmailTemplate{},
 		&models.TemplateBlock{},
 		&models.CampaignV2{},
