@@ -2,7 +2,9 @@ package api
 
 import (
 	"bufio"
+	"context"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -11,10 +13,12 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/pulak-ranjan/sampmail/internal/core"
+	"github.com/pulak-ranjan/sampmail/internal/middleware/custom"
 	"github.com/pulak-ranjan/sampmail/internal/models"
 )
 
@@ -38,12 +42,60 @@ type ImportStats struct {
 	Errors         []string `json:"errors"`
 }
 
-// In-memory job tracker (use Redis in production for multi-instance)
-var importJobs = make(map[string]*ImportJob)
+// importJobsMemory is the in-process fallback when Redis is unavailable.
+var importJobsMemory sync.Map
+
+func setImportJob(jobID string, job *ImportJob) {
+	rdb := custom.GetRedisClient()
+	if rdb == nil {
+		importJobsMemory.Store(jobID, job)
+		return
+	}
+	data, err := json.Marshal(job)
+	if err != nil {
+		importJobsMemory.Store(jobID, job)
+		return
+	}
+	rdb.Set(context.Background(), "import:"+jobID, data, 24*time.Hour)
+}
+
+func loadFromMemory(jobID string) (*ImportJob, bool) {
+	if v, ok := importJobsMemory.Load(jobID); ok {
+		// Safe two-value type assertion to guard against any cache corruption
+		job, ok := v.(*ImportJob)
+		if !ok {
+			importJobsMemory.Delete(jobID) // evict corrupt entry
+			return nil, false
+		}
+		return job, true
+	}
+	return nil, false
+}
+
+func getImportJob(jobID string) (*ImportJob, bool) {
+	rdb := custom.GetRedisClient()
+	if rdb == nil {
+		return loadFromMemory(jobID)
+	}
+	data, err := rdb.Get(context.Background(), "import:"+jobID).Bytes()
+	if err != nil {
+		// Fallback to in-process store
+		return loadFromMemory(jobID)
+	}
+	var job ImportJob
+	if err := json.Unmarshal(data, &job); err != nil {
+		return nil, false
+	}
+	return &job, true
+}
 
 // POST /api/import/csv - Async version
 // Returns 202 Accepted with job ID for tracking
 func (s *Server) handleCSVImportAsync(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	// Max 50MB for async processing
 	if err := r.ParseMultipartForm(50 << 20); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "file too large (max 50MB)"})
@@ -86,10 +138,20 @@ func (s *Server) handleCSVImportAsync(w http.ResponseWriter, r *http.Request) {
 		Status:    "pending",
 		CreatedAt: time.Now(),
 	}
-	importJobs[jobID] = job
+	setImportJob(jobID, job)
+
+	// Fix temp file cleanup: only remove on error paths before goroutine launch.
+	// The goroutine itself calls os.Remove(filePath) when done.
+	launched := false
+	defer func() {
+		if !launched {
+			os.Remove(tempFile)
+		}
+	}()
 
 	// Process async
 	go s.processCSVImportAsync(jobID, tempFile)
+	launched = true
 
 	// Return 202 Accepted with job ID
 	w.Header().Set("Location", "/api/import/status/"+jobID)
@@ -104,6 +166,9 @@ func (s *Server) handleCSVImportAsync(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/import/status/{jobId} - Check import job status
 func (s *Server) handleImportStatus(w http.ResponseWriter, r *http.Request) {
+	// Any authenticated user can check status (the job ID itself is a secret)
+
+
 	jobID := r.URL.Query().Get("id")
 	if jobID == "" {
 		// Try path param
@@ -113,7 +178,7 @@ func (s *Server) handleImportStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	job, exists := importJobs[jobID]
+	job, exists := getImportJob(jobID)
 	if !exists {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "job not found"})
 		return
@@ -124,17 +189,22 @@ func (s *Server) handleImportStatus(w http.ResponseWriter, r *http.Request) {
 
 // processCSVImportAsync handles the actual import in background
 func (s *Server) processCSVImportAsync(jobID, filePath string) {
-	job := importJobs[jobID]
+	job, ok := getImportJob(jobID)
+	if !ok {
+		return
+	}
 	job.Status = "processing"
+	setImportJob(jobID, job)
 
 	defer func() {
 		// Cleanup temp file
 		os.Remove(filePath)
-		
+
 		// Recover from panics
 		if r := recover(); r != nil {
 			job.Status = "failed"
 			job.Error = "internal error during import"
+			setImportJob(jobID, job)
 		}
 	}()
 
@@ -142,15 +212,14 @@ func (s *Server) processCSVImportAsync(jobID, filePath string) {
 	if err != nil {
 		job.Status = "failed"
 		job.Error = "failed to read file"
+		setImportJob(jobID, job)
 		return
 	}
 	defer file.Close()
 
-	// FIXED: Count lines by streaming instead of ReadAll to prevent memory exhaustion
-	// A 50MB CSV with ReadAll can use 200MB+ RAM due to slice overhead
+	// Count lines by streaming instead of ReadAll to prevent memory exhaustion
 	lineCount := 0
 	scanner := bufio.NewScanner(file)
-	// Set larger buffer for long lines (1MB max line length)
 	buf := make([]byte, 0, 64*1024)
 	scanner.Buffer(buf, 1024*1024)
 	for scanner.Scan() {
@@ -159,14 +228,17 @@ func (s *Server) processCSVImportAsync(jobID, filePath string) {
 	if err := scanner.Err(); err != nil {
 		job.Status = "failed"
 		job.Error = "failed to scan file"
+		setImportJob(jobID, job)
 		return
 	}
 	job.Total = lineCount - 1 // Subtract header row
+	setImportJob(jobID, job)
 
 	// Reset file to beginning
 	if _, err := file.Seek(0, 0); err != nil {
 		job.Status = "failed"
 		job.Error = "failed to reset file"
+		setImportJob(jobID, job)
 		return
 	}
 
@@ -178,6 +250,7 @@ func (s *Server) processCSVImportAsync(jobID, filePath string) {
 	if err != nil {
 		job.Status = "failed"
 		job.Error = "invalid CSV format"
+		setImportJob(jobID, job)
 		return
 	}
 
@@ -203,6 +276,7 @@ func (s *Server) processCSVImportAsync(jobID, filePath string) {
 	if !hasDomain {
 		job.Status = "failed"
 		job.Error = "missing 'domain' column"
+		setImportJob(jobID, job)
 		return
 	}
 
@@ -230,6 +304,9 @@ func (s *Server) processCSVImportAsync(jobID, filePath string) {
 		
 		lineNum++
 		job.Progress = lineNum
+		if lineNum%100 == 0 {
+			setImportJob(jobID, job)
+		}
 
 		if domainIdx >= len(record) {
 			continue
@@ -375,6 +452,7 @@ func (s *Server) processCSVImportAsync(jobID, filePath string) {
 	}
 
 	job.Status = "completed"
+	setImportJob(jobID, job)
 }
 
 // ===========================================
@@ -449,6 +527,10 @@ func isValidIP(ip string) bool {
 // POST /api/import/csv - Synchronous version (DEPRECATED - use async)
 // Kept for backward compatibility but limited to small files
 func (s *Server) handleCSVImport(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	// Limit sync imports to 1MB to prevent timeouts
 	r.ParseMultipartForm(1 << 20)
 

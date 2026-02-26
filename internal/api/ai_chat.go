@@ -53,6 +53,10 @@ func (s *Server) handleGetChatHistory(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/ai/chat
 func (s *Server) handleAIChat(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	log := logger.WithComponent("ai_chat")
 
 	var req ChatRequest
@@ -205,17 +209,11 @@ func (s *Server) runSafeTool(cmdName, args string) string {
 
 	switch cmdName {
 	case "status":
-		// Check if we can connect to KumoMTA API
-		client := &http.Client{Timeout: 2 * time.Second}
-		resp, err := client.Get("http://127.0.0.1:8000/api/admin/status")
-		if err != nil {
+		client := core.GetKumoClient()
+		if err := client.HealthCheck(); err != nil {
 			return "KumoMTA API not responding: " + err.Error()
 		}
-		defer resp.Body.Close()
-		if resp.StatusCode == 200 {
-			return "KumoMTA is running and API is responding"
-		}
-		return fmt.Sprintf("KumoMTA API returned status: %d", resp.StatusCode)
+		return "KumoMTA is running and API is responding"
 
 	case "queue":
 		stats, err := core.GetQueueStats()
@@ -344,7 +342,7 @@ func sanitizeDomain(domain string) string {
 func (s *Server) sendToAI(provider, key string, messages []ChatMessage) (string, error) {
 	// --- Google Gemini Handler ---
 	if provider == "gemini" {
-		url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + key
+		url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
 
 		type Part struct {
 			Text string `json:"text"`
@@ -385,6 +383,7 @@ func (s *Server) sendToAI(provider, key string, messages []ChatMessage) (string,
 		reqBody, _ := json.Marshal(geminiReq)
 		req, _ := http.NewRequest("POST", url, bytes.NewBuffer(reqBody))
 		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("x-goog-api-key", key)
 
 		client := &http.Client{Timeout: 60 * time.Second}
 		resp, err := client.Do(req)

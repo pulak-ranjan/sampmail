@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -184,7 +185,7 @@ func (ats *AITemplateService) GenerateTemplate(ctx context.Context, req *Generat
 	// Rate limit check
 	if req.UserID > 0 {
 		if allowed, reason := ats.rateLimiter.Allow(req.UserID); !allowed {
-			return nil, fmt.Errorf(reason)
+			return nil, errors.New(reason)
 		}
 	}
 

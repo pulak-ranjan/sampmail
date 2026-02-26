@@ -3,7 +3,9 @@ package api
 import (
 	"encoding/base64"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -23,14 +25,41 @@ func NewTrackingHandler(st *store.Store) *TrackingHandler {
 	return &TrackingHandler{Store: st}
 }
 
-// GET /api/track/open/{recipient_id}
+// GET /api/track/open/{id}?sig=...
 func (h *TrackingHandler) HandleTrackOpen(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, _ := strconv.Atoi(idStr)
+	signature := r.URL.Query().Get("sig")
 
-	if id > 0 {
-		go h.recordOpen(uint(id), r)
+	// Validate ID is positive
+	if id <= 0 {
+		w.Header().Set("Content-Type", "image/gif")
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Write(pixelGIF)
+		return
 	}
+
+	// Verify signature to prevent fake tracking
+	// The signature should be HMAC of the recipient ID
+	expectedSig := core.SignLink(idStr)
+	if signature == "" || !hmacEqual(expectedSig, signature) {
+		// Still return pixel but don't record (prevents tracking manipulation)
+		w.Header().Set("Content-Type", "image/gif")
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Write(pixelGIF)
+		return
+	}
+
+	// Basic bot detection
+	userAgent := strings.ToLower(r.UserAgent())
+	if isBot(userAgent) {
+		w.Header().Set("Content-Type", "image/gif")
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Write(pixelGIF)
+		return
+	}
+
+	go h.recordOpen(uint(id), r)
 
 	// Return transparent pixel
 	w.Header().Set("Content-Type", "image/gif")
@@ -38,7 +67,7 @@ func (h *TrackingHandler) HandleTrackOpen(w http.ResponseWriter, r *http.Request
 	w.Write(pixelGIF)
 }
 
-// GET /api/track/click/{recipient_id}?url=...
+// GET /api/track/click/{id}?url=...&sig=...
 func (h *TrackingHandler) HandleTrackClick(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, _ := strconv.Atoi(idStr)
@@ -52,11 +81,52 @@ func (h *TrackingHandler) HandleTrackClick(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if id > 0 {
+	// Defense-in-depth: validate URL scheme even after HMAC verification
+	parsedURL, err := url.Parse(targetURL)
+	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
+		http.Error(w, "Invalid redirect", http.StatusForbidden)
+		return
+	}
+
+	// Basic bot detection
+	userAgent := strings.ToLower(r.UserAgent())
+	if !isBot(userAgent) && id > 0 {
 		go h.recordClick(uint(id))
 	}
 
 	http.Redirect(w, r, targetURL, http.StatusFound)
+}
+
+// hmacEqual performs constant-time comparison for HMAC signatures
+func hmacEqual(expected, actual string) bool {
+	if len(expected) != len(actual) {
+		return false
+	}
+	result := true
+	for i := range expected {
+		if expected[i] != actual[i] {
+			result = false
+		}
+	}
+	return result
+}
+
+// isBot detects common bots and crawlers
+func isBot(userAgent string) bool {
+	botPatterns := []string{
+		"bot", "crawler", "spider", "scraper",
+		"googlebot", "bingbot", "slurp", "duckduckbot",
+		"baiduspider", "yandexbot", "facebookexternalhit",
+		"twitterbot", "linkedinbot", "pinterest",
+		"preview", "fetcher", "monitor", "check",
+	}
+	
+	for _, pattern := range botPatterns {
+		if strings.Contains(userAgent, pattern) {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *TrackingHandler) recordOpen(id uint, r *http.Request) {

@@ -21,9 +21,30 @@ func (s *Server) getUser(r *http.Request) string {
 	return "unknown"
 }
 
+// getOrgID extracts the organization ID from request context.
+// For superadmins without an org context, returns 0 (no filter = see all).
+// For non-superadmins without an org context, writes 403 and returns false.
+func getOrgID(w http.ResponseWriter, r *http.Request) (uint, bool) {
+	admin := getAdminFromContext(r.Context())
+	org := getOrganizationFromContext(r.Context())
+	if org != nil && org.ID > 0 {
+		return org.ID, true
+	}
+	if admin != nil && admin.IsSuperAdmin {
+		return 0, true // superadmin: no filter
+	}
+	writeJSON(w, http.StatusForbidden, map[string]string{"error": "organization context required"})
+	return 0, false
+}
+
 // GET /api/domains
 func (s *Server) handleListDomains(w http.ResponseWriter, r *http.Request) {
-	domains, err := s.Store.ListDomains()
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
+	domains, err := s.Store.ListDomains(orgID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list domains"})
 		return
@@ -44,6 +65,11 @@ func (s *Server) handleListDomains(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/domains
 func (s *Server) handleCreateDomain(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	var d models.Domain
 	if err := json.NewDecoder(r.Body).Decode(&d); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -55,6 +81,7 @@ func (s *Server) handleCreateDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	d.OrganizationID = orgID
 	if d.MailHost == "" {
 		d.MailHost = "mail." + d.Name
 	}
@@ -81,6 +108,11 @@ func (s *Server) handleCreateDomain(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/domains/{id}
 func (s *Server) handleGetDomain(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -98,11 +130,22 @@ func (s *Server) handleGetDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Verify ownership: non-superadmin must own the domain
+	if orgID > 0 && domain.OrganizationID != orgID {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "access denied"})
+		return
+	}
+
 	writeJSON(w, http.StatusOK, domain)
 }
 
 // PUT /api/domains/{id}
 func (s *Server) handleUpdateDomain(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -116,19 +159,38 @@ func (s *Server) handleUpdateDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if orgID > 0 && domain.OrganizationID != orgID {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "access denied"})
+		return
+	}
+
 	var update models.Domain
 	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 		return
 	}
 
-	if update.Name != "" { domain.Name = update.Name }
-	if update.MailHost != "" { domain.MailHost = update.MailHost }
-	if update.BounceHost != "" { domain.BounceHost = update.BounceHost }
-	if update.DMARCPolicy != "" { domain.DMARCPolicy = update.DMARCPolicy }
-	if update.DMARCRua != "" { domain.DMARCRua = update.DMARCRua }
-	if update.DMARCRuf != "" { domain.DMARCRuf = update.DMARCRuf }
-	if update.DMARCPercentage > 0 { domain.DMARCPercentage = update.DMARCPercentage }
+	if update.Name != "" {
+		domain.Name = update.Name
+	}
+	if update.MailHost != "" {
+		domain.MailHost = update.MailHost
+	}
+	if update.BounceHost != "" {
+		domain.BounceHost = update.BounceHost
+	}
+	if update.DMARCPolicy != "" {
+		domain.DMARCPolicy = update.DMARCPolicy
+	}
+	if update.DMARCRua != "" {
+		domain.DMARCRua = update.DMARCRua
+	}
+	if update.DMARCRuf != "" {
+		domain.DMARCRuf = update.DMARCRuf
+	}
+	if update.DMARCPercentage > 0 {
+		domain.DMARCPercentage = update.DMARCPercentage
+	}
 
 	if err := s.Store.UpdateDomain(domain); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update domain"})
@@ -143,6 +205,11 @@ func (s *Server) handleUpdateDomain(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/domains/{id}
 func (s *Server) handleDeleteDomain(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -150,10 +217,17 @@ func (s *Server) handleDeleteDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch first to get name for log
-	d, _ := s.Store.GetDomainByID(uint(id))
-	name := "unknown"
-	if d != nil { name = d.Name }
+	// Fetch first to verify ownership and get name for log
+	d, err := s.Store.GetDomainByID(uint(id))
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "domain not found"})
+		return
+	}
+
+	if orgID > 0 && d.OrganizationID != orgID {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "access denied"})
+		return
+	}
 
 	if err := s.Store.DeleteDomain(uint(id)); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to delete domain"})
@@ -161,7 +235,7 @@ func (s *Server) handleDeleteDomain(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// AUDIT LOG
-	go s.WS.SendAuditLog("Delete Domain", fmt.Sprintf("Deleted domain %s (ID: %d)", name, id), s.getUser(r))
+	go s.WS.SendAuditLog("Delete Domain", fmt.Sprintf("Deleted domain %s (ID: %d)", d.Name, id), s.getUser(r))
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
@@ -172,6 +246,11 @@ func (s *Server) handleDeleteDomain(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/domains/{domainID}/senders
 func (s *Server) handleListSenders(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	domainIDStr := chi.URLParam(r, "domainID")
 	domainID, err := strconv.ParseUint(domainIDStr, 10, 32)
 	if err != nil {
@@ -179,7 +258,7 @@ func (s *Server) handleListSenders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	senders, err := s.Store.ListSendersByDomain(uint(domainID))
+	senders, err := s.Store.ListSendersByDomain(uint(domainID), orgID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list senders"})
 		return
@@ -200,6 +279,11 @@ func (s *Server) handleListSenders(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/domains/{domainID}/senders
 func (s *Server) handleCreateSender(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	domainIDStr := chi.URLParam(r, "domainID")
 	domainID, err := strconv.ParseUint(domainIDStr, 10, 32)
 	if err != nil {
@@ -213,6 +297,12 @@ func (s *Server) handleCreateSender(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Verify domain ownership
+	if orgID > 0 && domain.OrganizationID != orgID {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "access denied"})
+		return
+	}
+
 	var snd models.Sender
 	if err := json.NewDecoder(r.Body).Decode(&snd); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -220,6 +310,7 @@ func (s *Server) handleCreateSender(w http.ResponseWriter, r *http.Request) {
 	}
 
 	snd.DomainID = uint(domainID)
+	snd.OrganizationID = orgID
 	if snd.LocalPart != "" && snd.Email == "" {
 		snd.Email = snd.LocalPart + "@" + domain.Name
 	}
@@ -240,6 +331,11 @@ func (s *Server) handleCreateSender(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/senders/{id}
 func (s *Server) handleGetSender(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -250,6 +346,11 @@ func (s *Server) handleGetSender(w http.ResponseWriter, r *http.Request) {
 	sender, err := s.Store.GetSenderByID(uint(id))
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "sender not found"})
+		return
+	}
+
+	if orgID > 0 && sender.OrganizationID != orgID {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "access denied"})
 		return
 	}
 
@@ -258,6 +359,11 @@ func (s *Server) handleGetSender(w http.ResponseWriter, r *http.Request) {
 
 // PUT /api/senders/{id}
 func (s *Server) handleUpdateSender(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -268,6 +374,11 @@ func (s *Server) handleUpdateSender(w http.ResponseWriter, r *http.Request) {
 	sender, err := s.Store.GetSenderByID(uint(id))
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "sender not found"})
+		return
+	}
+
+	if orgID > 0 && sender.OrganizationID != orgID {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "access denied"})
 		return
 	}
 
@@ -277,11 +388,21 @@ func (s *Server) handleUpdateSender(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if update.LocalPart != "" { sender.LocalPart = update.LocalPart }
-	if update.Email != "" { sender.Email = update.Email }
-	if update.IP != "" { sender.IP = update.IP }
-	if update.SMTPPassword != "" { sender.SMTPPassword = update.SMTPPassword }
-	if update.BounceUsername != "" { sender.BounceUsername = update.BounceUsername }
+	if update.LocalPart != "" {
+		sender.LocalPart = update.LocalPart
+	}
+	if update.Email != "" {
+		sender.Email = update.Email
+	}
+	if update.IP != "" {
+		sender.IP = update.IP
+	}
+	if update.SMTPPassword != "" {
+		sender.SMTPPassword = update.SMTPPassword
+	}
+	if update.BounceUsername != "" {
+		sender.BounceUsername = update.BounceUsername
+	}
 
 	if err := s.Store.UpdateSender(sender); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update sender"})
@@ -296,6 +417,11 @@ func (s *Server) handleUpdateSender(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/senders/{id}
 func (s *Server) handleDeleteSender(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -303,10 +429,17 @@ func (s *Server) handleDeleteSender(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get info for log
-	snd, _ := s.Store.GetSenderByID(uint(id))
-	email := "unknown"
-	if snd != nil { email = snd.Email }
+	// Get info for log and ownership check
+	snd, err := s.Store.GetSenderByID(uint(id))
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "sender not found"})
+		return
+	}
+
+	if orgID > 0 && snd.OrganizationID != orgID {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "access denied"})
+		return
+	}
 
 	if err := s.Store.DeleteSender(uint(id)); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to delete sender"})
@@ -314,13 +447,18 @@ func (s *Server) handleDeleteSender(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// AUDIT LOG
-	go s.WS.SendAuditLog("Delete Sender", fmt.Sprintf("Deleted sender %s (ID: %d)", email, id), s.getUser(r))
+	go s.WS.SendAuditLog("Delete Sender", fmt.Sprintf("Deleted sender %s (ID: %d)", snd.Email, id), s.getUser(r))
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 // POST /api/domains/{domainID}/senders/{id}/setup
 func (s *Server) handleSetupSender(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	domainIDStr := chi.URLParam(r, "domainID")
 	domainID, err := strconv.ParseUint(domainIDStr, 10, 32)
 	if err != nil {
@@ -338,6 +476,11 @@ func (s *Server) handleSetupSender(w http.ResponseWriter, r *http.Request) {
 	domain, err := s.Store.GetDomainByID(uint(domainID))
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "domain not found"})
+		return
+	}
+
+	if orgID > 0 && domain.OrganizationID != orgID {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "access denied"})
 		return
 	}
 
@@ -361,10 +504,10 @@ func (s *Server) handleSetupSender(w http.ResponseWriter, r *http.Request) {
 	go s.WS.SendAuditLog("Setup Sender", fmt.Sprintf("Auto-configured DKIM/Bounce for %s", sender.Email), s.getUser(r))
 
 	result := map[string]interface{}{
-		"dkim_generated":   dkimErr == nil,
-		"bounce_created":   bounceErr == nil,
-		"bounce_user":      bounceUser + "@" + domain.Name,
-		"selector":         sender.LocalPart,
+		"dkim_generated": dkimErr == nil,
+		"bounce_created": bounceErr == nil,
+		"bounce_user":    bounceUser + "@" + domain.Name,
+		"selector":       sender.LocalPart,
 	}
 
 	if dkimErr != nil {

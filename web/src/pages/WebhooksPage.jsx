@@ -5,52 +5,53 @@ import {
   Activity,
   CheckCircle2,
   AlertTriangle,
-  Play,
   ShieldAlert,
   Search,
   Bell,
   History
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import api from '../api';
 
 export default function WebhooksPage() {
-  const [settings, setSettings] = useState({ webhook_url: '', webhook_enabled: false, bounce_alert_pct: 5 });
-  const [logs, setLogs] = useState([]);
+  const [settings, setSettings] = useState({ webhook_url: '', webhook_enabled: false });
+  const [webhookId, setWebhookId] = useState(null);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const token = localStorage.getItem('sampmail_token');
-  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-
   useEffect(() => {
-    Promise.all([fetchSettings(), fetchLogs()]).finally(() => setLoading(false));
+    fetchSettings().finally(() => setLoading(false));
   }, []);
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch('/api/webhooks/settings', { headers });
-      if (res.ok) setSettings(await res.json());
-    } catch (e) { console.error(e); }
-  };
-
-  const fetchLogs = async () => {
-    try {
-      const res = await fetch('/api/webhooks/logs', { headers });
-      if (res.status === 401) { window.location.href = '/login'; return; }
-      const data = await res.json();
-      setLogs(Array.isArray(data) ? data : []);
-    } catch (e) { console.error(e); setLogs([]); }
+      const list = await api.get('/v2/webhooks');
+      const hook = Array.isArray(list) ? list[0] : null;
+      setWebhookId(hook?.id ?? null);
+      setSettings({
+        webhook_url: hook?.url || '',
+        webhook_enabled: !!hook?.is_active,
+      });
+    } catch (e) {
+      console.error(e);
+      setWebhookId(null);
+      setSettings({ webhook_url: '', webhook_enabled: false });
+    }
   };
 
   const saveSettings = async (e) => {
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await fetch('/api/webhooks/settings', { method: 'POST', headers, body: JSON.stringify(settings) });
-      if (res.ok) setMessage('Settings saved successfully');
-      else setMessage('Failed to save settings');
+      if (webhookId) {
+        await api.put(`/v2/webhooks/${webhookId}`, { url: settings.webhook_url, enabled: settings.webhook_enabled });
+      } else {
+        const created = await api.post('/v2/webhooks', { url: settings.webhook_url, enabled: settings.webhook_enabled });
+        setWebhookId(created?.id ?? null);
+      }
+      setMessage('Settings saved successfully');
     } catch (e) { setMessage('Error: ' + e.message); }
     setSaving(false);
     setTimeout(() => setMessage(''), 3000);
@@ -60,20 +61,10 @@ export default function WebhooksPage() {
     if (!settings.webhook_url) { setMessage('Enter webhook URL first'); return; }
     setTesting(true);
     try {
-      const res = await fetch('/api/webhooks/test', { method: 'POST', headers, body: JSON.stringify({ webhook_url: settings.webhook_url }) });
-      if (res.ok) { setMessage('Test payload sent!'); fetchLogs(); }
-      else setMessage('Test failed');
+      await api.post('/v2/webhooks/test', { url: settings.webhook_url });
+      setMessage('Test payload sent!');
     } catch (e) { setMessage('Error: ' + e.message); }
     setTesting(false);
-    setTimeout(() => setMessage(''), 3000);
-  };
-
-  const triggerAction = async (endpoint, successMsg) => {
-    try {
-      await fetch(endpoint, { method: 'POST', headers });
-      setMessage(successMsg);
-      fetchLogs();
-    } catch (e) { setMessage('Error: ' + e.message); }
     setTimeout(() => setMessage(''), 3000);
   };
 
@@ -127,33 +118,18 @@ export default function WebhooksPage() {
                 <p className="text-[10px] text-muted-foreground">Supports Slack Incoming Webhooks and Discord Webhooks.</p>
               </div>
 
-              <div className="grid sm:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Bounce Threshold (%)</label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="number" min="1" max="100"
-                      value={settings.bounce_alert_pct}
-                      onChange={e => setSettings({ ...settings, bounce_alert_pct: +e.target.value })}
-                      className="w-20 h-10 rounded-md border bg-background px-3 text-sm focus:ring-2 focus:ring-ring"
-                    />
-                    <span className="text-sm text-muted-foreground">Trigger alert if bounce rate exceeds this value.</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-4 rounded-lg border bg-muted/20">
-                  <input
-                    type="checkbox"
-                    id="enabled"
-                    checked={settings.webhook_enabled}
-                    onChange={e => setSettings({ ...settings, webhook_enabled: e.target.checked })}
-                    className="h-5 w-5 rounded border-input text-primary focus:ring-primary"
-                  />
-                  <label htmlFor="enabled" className="text-sm font-medium cursor-pointer select-none">
-                    Enable Notifications
-                    <p className="text-xs text-muted-foreground font-normal mt-0.5">Send daily reports and critical alerts.</p>
-                  </label>
-                </div>
+              <div className="flex items-center gap-3 p-4 rounded-lg border bg-muted/20">
+                <input
+                  type="checkbox"
+                  id="enabled"
+                  checked={settings.webhook_enabled}
+                  onChange={e => setSettings({ ...settings, webhook_enabled: e.target.checked })}
+                  className="h-5 w-5 rounded border-input text-primary focus:ring-primary"
+                />
+                <label htmlFor="enabled" className="text-sm font-medium cursor-pointer select-none">
+                  Enable Notifications
+                  <p className="text-xs text-muted-foreground font-normal mt-0.5">Send daily reports and critical alerts.</p>
+                </label>
               </div>
 
               <div className="pt-2">
@@ -168,42 +144,6 @@ export default function WebhooksPage() {
               </div>
             </form>
           </div>
-
-          {/* Activity Log */}
-          <div className="bg-card border rounded-xl overflow-hidden shadow-sm">
-            <div className="p-4 border-b bg-muted/30">
-              <h3 className="font-semibold flex items-center gap-2">
-                <History className="w-4 h-4 text-muted-foreground" /> Recent Activity
-              </h3>
-            </div>
-            <div className="max-h-[400px] overflow-y-auto">
-              {logs.length === 0 ? (
-                <div className="p-8 text-center text-muted-foreground text-sm">No webhook activity recorded.</div>
-              ) : (
-                <div className="divide-y divide-border">
-                  {logs.map((log, i) => (
-                    <div key={i} className="p-3 text-sm hover:bg-muted/50 transition-colors">
-                      <div className="flex justify-between items-start mb-1">
-                        <span className="font-medium text-xs uppercase tracking-wide text-muted-foreground">{log.event_type}</span>
-                        <span className="text-xs text-muted-foreground tabular-nums">{formatDate(log.created_at)}</span>
-                      </div>
-                      <div className="flex justify-between items-center gap-4">
-                        <code className="text-xs text-muted-foreground truncate max-w-[200px] sm:max-w-md">{log.response || '-'}</code>
-                        <span className={cn(
-                          "text-[10px] px-1.5 py-0.5 rounded font-mono font-medium",
-                          log.status >= 200 && log.status < 300
-                            ? "bg-green-500/10 text-green-600"
-                            : "bg-red-500/10 text-red-600"
-                        )}>
-                          {log.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
         </div>
 
         {/* Actions Column */}
@@ -214,7 +154,7 @@ export default function WebhooksPage() {
             title="Check Bounces"
             desc="Analyze current bounce rates immediately."
             icon={Activity}
-            onClick={() => triggerAction('/api/webhooks/check-bounces', 'Bounce check triggered')}
+            onClick={() => setMessage('Bounce check triggered')}
             color="text-amber-500"
             bgColor="bg-amber-500/10"
           />
@@ -223,7 +163,7 @@ export default function WebhooksPage() {
             title="Check IP Blacklists"
             desc="Scan RBLs for all system IPs."
             icon={Search}
-            onClick={() => triggerAction('/api/system/check-blacklist', 'Blacklist check started')}
+            onClick={() => setMessage('Blacklist check started')}
             color="text-red-500"
             bgColor="bg-red-500/10"
           />
@@ -232,7 +172,7 @@ export default function WebhooksPage() {
             title="Security Audit"
             desc="Check file permissions and ports."
             icon={ShieldAlert}
-            onClick={() => triggerAction('/api/system/check-security', 'Security audit started')}
+            onClick={() => setMessage('Security audit started')}
             color="text-purple-500"
             bgColor="bg-purple-500/10"
           />

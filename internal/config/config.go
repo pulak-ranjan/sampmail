@@ -35,6 +35,11 @@ type Config struct {
 	// Security
 	AppSecret string // SAMPMAIL_SECRET (required, min 32 chars)
 
+	// Public-facing base URL for tracking/unsubscribe links.
+	// Set via SAMPMAIL_BASE_URL (e.g. https://mail.yourdomain.com).
+	// Auto-derived from listen address when not set.
+	BaseURL string // SAMPMAIL_BASE_URL
+
 	// Proxy settings for rate limiting
 	TrustProxy       bool     // SAMPMAIL_TRUST_PROXY (default: false)
 	TrustedProxyCIDR []string // SAMPMAIL_TRUSTED_PROXY_CIDR (comma-separated CIDRs)
@@ -126,6 +131,7 @@ func Get() *Config {
 
 			// Security
 			AppSecret: os.Getenv("SAMPMAIL_SECRET"),
+			BaseURL:   deriveBaseURL(),
 
 			// Proxy settings
 			TrustProxy:       getEnvBool("SAMPMAIL_TRUST_PROXY", false),
@@ -512,4 +518,34 @@ func parsePostgresSSLMode() string {
 		return sslPart
 	}
 	return "disable" // Default to disable for local dev
+}
+
+// deriveBaseURL builds the canonical public-facing base URL.
+// Priority:
+//  1. SAMPMAIL_BASE_URL env var (explicit, recommended for production)
+//  2. https://${SAMPMAIL_LISTEN_ADDR} when TLS is enabled
+//  3. http://${SAMPMAIL_LISTEN_ADDR} as last resort
+//
+// The value is used as the root for tracking links, unsubscribe URLs, and
+// one-click RFC-8058 headers.  It is also auto-saved to AppSettings on
+// first startup so the UI reflects the correct hostname without manual
+// configuration.
+func deriveBaseURL() string {
+	if v := os.Getenv("SAMPMAIL_BASE_URL"); v != "" {
+		// Strip any trailing slash so callers can always do baseURL+"/path"
+		return strings.TrimRight(v, "/")
+	}
+	// Fall back to the listen address
+	addr := getEnv("SAMPMAIL_LISTEN_ADDR", "0.0.0.0:9000")
+	// Replace 0.0.0.0 / :: with localhost so URLs are at least usable locally
+	if strings.HasPrefix(addr, "0.0.0.0:") {
+		addr = "localhost" + addr[7:]
+	} else if strings.HasPrefix(addr, "[::]:") {
+		addr = "localhost" + addr[4:]
+	}
+	scheme := "http"
+	if getEnvBool("SAMPMAIL_TLS_ENABLED", false) {
+		scheme = "https"
+	}
+	return scheme + "://" + addr
 }

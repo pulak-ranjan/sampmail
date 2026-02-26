@@ -3,6 +3,8 @@ package core
 import (
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/pulak-ranjan/sampmail/internal/models"
@@ -21,6 +23,130 @@ var WarmupSchedules = map[string][]string{
 	"aggressive": {
 		"50/hr", "100/hr", "250/hr", "500/hr", "1000/hr", "2500/hr", "5000/hr", "10000/hr", "20000/hr",
 	},
+}
+
+// WarmupRate represents a parsed warmup rate
+type WarmupRate struct {
+	Count    int
+	Period   time.Duration
+	Interval time.Duration // Time between each email
+}
+
+// ParseWarmupRate parses a rate string like "100/hr" or "50/hr"
+func ParseWarmupRate(rateStr string) (*WarmupRate, error) {
+	rateStr = strings.TrimSpace(strings.ToLower(rateStr))
+	
+	// Parse format: "N/hr" or "N/hour"
+	parts := strings.Split(rateStr, "/")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid rate format: %s", rateStr)
+	}
+	
+	count, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return nil, fmt.Errorf("invalid count in rate: %s", rateStr)
+	}
+	
+	var period time.Duration
+	switch parts[1] {
+	case "hr", "hour", "h":
+		period = time.Hour
+	case "min", "minute", "m":
+		period = time.Minute
+	case "day", "d":
+		period = 24 * time.Hour
+	default:
+		return nil, fmt.Errorf("unknown period in rate: %s", rateStr)
+	}
+	
+	// Calculate interval between emails
+	interval := period / time.Duration(count)
+	
+	return &WarmupRate{
+		Count:    count,
+		Period:   period,
+		Interval: interval,
+	}, nil
+}
+
+// GetWarmupRateForSender returns the current warmup rate for a sender
+func GetWarmupRateForSender(sender *models.Sender) *WarmupRate {
+	if sender == nil || !sender.WarmupEnabled {
+		// No warmup - return unlimited rate
+		return &WarmupRate{
+			Count:    1000000,
+			Period:   time.Hour,
+			Interval: time.Millisecond,
+		}
+	}
+	
+	planName := sender.WarmupPlan
+	if planName == "" {
+		planName = "standard"
+	}
+	
+	plan, exists := WarmupSchedules[planName]
+	if !exists {
+		plan = WarmupSchedules["standard"]
+	}
+	
+	// Get day (0-indexed)
+	day := sender.WarmupDay
+	if day < 0 {
+		day = 0
+	}
+	if day >= len(plan) {
+		day = len(plan) - 1
+	}
+	
+	rate, err := ParseWarmupRate(plan[day])
+	if err != nil {
+		// Fallback to safe default
+		return &WarmupRate{
+			Count:    100,
+			Period:   time.Hour,
+			Interval: 36 * time.Second,
+		}
+	}
+	
+	return rate
+}
+
+// GetWarmupFactor returns the warmup factor (0.0 - 1.0) for a sender
+// This can be used to scale rate limits
+func GetWarmupFactor(sender *models.Sender) float64 {
+	if sender == nil || !sender.WarmupEnabled {
+		return 1.0 // Full rate
+	}
+	
+	planName := sender.WarmupPlan
+	if planName == "" {
+		planName = "standard"
+	}
+	
+	plan, exists := WarmupSchedules[planName]
+	if !exists {
+		plan = WarmupSchedules["standard"]
+	}
+	
+	// Calculate progress as fraction of plan completed
+	day := sender.WarmupDay
+	if day < 0 {
+		day = 0
+	}
+	if day >= len(plan) {
+		return 1.0 // Fully warmed up
+	}
+	
+	// Factor based on position in warmup schedule
+	// Day 0 = 0.1, Day 5 = 0.5, Day 10 = 1.0
+	return float64(day+1) / float64(len(plan))
+}
+
+// CalculateThrottleInterval returns the time to wait between emails for a sender
+func CalculateThrottleInterval(sender *models.Sender) time.Duration {
+	rate := GetWarmupRateForSender(sender)
+	return rate.Interval
 }
 
 // WarmupConfig holds thresholds for the "brake check"
@@ -47,7 +173,8 @@ func ProcessDailyWarmup(st *store.Store) error {
 
 // ProcessDailyWarmupWithConfig allows custom thresholds
 func ProcessDailyWarmupWithConfig(st *store.Store, cfg WarmupConfig) error {
-	domains, err := st.ListDomains()
+	// orgID=0: warmup processes all domains across all orgs (system-level)
+	domains, err := st.ListDomains(0)
 	if err != nil {
 		return err
 	}

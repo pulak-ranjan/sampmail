@@ -1,126 +1,260 @@
-# API Reference
+# SampMail API Reference
 
-SampMail provides a RESTful API for all operations. All endpoints require authentication unless otherwise noted.
-
-## Base URL
+All API communication uses JSON. All endpoints require an `Authorization` header
+with a valid session token unless stated otherwise.
 
 ```
-http://localhost:9000/api
+Authorization: Bearer <session-token>
 ```
+
+The base URL depends on your deployment. Examples in this document use:
+
+```
+http://localhost:9000
+```
+
+---
+
+## Table of Contents
+
+- [Authentication](#authentication)
+- [Dashboard](#dashboard)
+- [Settings](#settings)
+- [Domains and Senders](#domains-and-senders)
+- [Campaigns V2](#campaigns-v2)
+- [Contact Lists V2](#contact-lists-v2)
+- [Contacts and Import](#contacts-and-import)
+- [Templates V2](#templates-v2)
+- [Suppressions V2](#suppressions-v2)
+- [Automations V2](#automations-v2)
+- [Webhooks V2](#webhooks-v2)
+- [Analytics V2](#analytics-v2)
+- [Organizations (Superadmin)](#organizations-superadmin)
+- [Users (Superadmin)](#users-superadmin)
+- [System and Health](#system-and-health)
+- [Tracking Endpoints](#tracking-endpoints)
+- [Error Format](#error-format)
+
+---
 
 ## Authentication
 
+### Register
+
+```
+POST /api/auth/register
+```
+
+Body:
+
+```json
+{
+  "email": "admin@example.com",
+  "password": "minimum8chars1"
+}
+```
+
+The first registered user is automatically assigned the superadmin role.
+
+Response:
+
+```json
+{
+  "token": "<session-token>",
+  "user": {
+    "id": 1,
+    "email": "admin@example.com",
+    "is_super_admin": true
+  }
+}
+```
+
+---
+
 ### Login
 
-```http
+```
 POST /api/auth/login
-Content-Type: application/json
+```
 
+Body:
+
+```json
 {
   "email": "admin@example.com",
   "password": "your-password"
 }
 ```
 
-**Response:**
+If 2FA is enabled, the response contains a `requires_2fa: true` field and a temporary
+token. Use that token to call `POST /api/auth/verify-2fa`.
+
+Response (no 2FA):
+
 ```json
 {
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": {
-    "id": 1,
-    "email": "admin@example.com",
-    "is_admin": true,
-    "two_factor_enabled": false
-  }
-}
-```
-
-### Using the Token
-
-Include the token in all subsequent requests:
-
-```http
-Authorization: Bearer <token>
-```
-
-### Register (Deprecated in v0.2.0+)
-
-> **Note:** Public registration is disabled in v0.2.0+. Super Admins create users via CLI:
-> ```bash
-> ./sampmail user create email@example.com "password" --role super_admin
-> ```
-
-```http
-POST /api/auth/register
-Content-Type: application/json
-
-{
-  "email": "admin@example.com",
-  "password": "secure-password-123"
-}
-```
-
-### Two-Factor Authentication
-
-**Setup 2FA:**
-```http
-POST /api/auth/setup-2fa
-
-Response:
-{
-  "secret": "JBSWY3DPEHPK3PXP",
-  "qr_code": "data:image/png;base64,..."
-}
-```
-
-**Enable 2FA:**
-```http
-POST /api/auth/enable-2fa
-{
-  "code": "123456"
-}
-```
-
-**Verify 2FA (after login):**
-```http
-POST /api/auth/verify-2fa
-{
-  "code": "123456",
-  "temp_token": "temporary-token-from-login"
+  "token": "<session-token>",
+  "user": { "id": 1, "email": "admin@example.com", "is_super_admin": false }
 }
 ```
 
 ---
 
-## Domains
+### Verify 2FA
 
-### List Domains
+```
+POST /api/auth/verify-2fa
+```
 
-```http
+Rate-limited. Locked after repeated failures.
+
+Body:
+
+```json
+{
+  "token": "<temp-token-from-login>",
+  "code": "123456"
+}
+```
+
+Response: same as login without 2FA.
+
+---
+
+### Get current user
+
+```
+GET /api/auth/me
+```
+
+Returns the authenticated user's profile.
+
+---
+
+### Logout
+
+```
+POST /api/auth/logout
+```
+
+Invalidates the current session token.
+
+---
+
+### List sessions
+
+```
+GET /api/auth/sessions
+```
+
+Returns all active sessions for the current user, including IP address and User-Agent.
+
+---
+
+### Setup 2FA
+
+```
+POST /api/auth/setup-2fa
+```
+
+Returns a TOTP secret and a `otpauth://` URI for QR code generation. The secret is
+not yet active until `enable-2fa` is called with a valid code.
+
+---
+
+### Enable 2FA
+
+```
+POST /api/auth/enable-2fa
+```
+
+Body:
+
+```json
+{ "code": "123456" }
+```
+
+Activates 2FA for the current user after verifying the code.
+
+---
+
+### Disable 2FA
+
+```
+POST /api/auth/disable-2fa
+```
+
+Body:
+
+```json
+{ "code": "123456" }
+```
+
+---
+
+## Dashboard
+
+### Get dashboard statistics
+
+```
+GET /api/dashboard/stats
+```
+
+Returns aggregate counts: total contacts, campaigns, sent emails, open rate,
+bounce rate, and recent campaign summaries.
+
+---
+
+## Settings
+
+### Get app settings
+
+```
+GET /api/settings
+```
+
+Returns the global AppSettings record including the configured hostname, SMTP settings,
+AI provider, and webhook configuration.
+
+---
+
+### Update app settings
+
+```
+POST /api/settings
+```
+
+Body fields (all optional, sends only what you want to change):
+
+```json
+{
+  "main_hostname": "mail.yourdomain.com",
+  "main_server_ip": "203.0.113.42",
+  "webhook_url": "https://hooks.example.com/sampmail",
+  "webhook_enabled": true,
+  "bounce_alert_pct": 5
+}
+```
+
+---
+
+## Domains and Senders
+
+### List domains
+
+```
 GET /api/domains
 ```
 
-**Response:**
-```json
-[
-  {
-    "id": 1,
-    "name": "example.com",
-    "mail_host": "mail.example.com",
-    "bounce_host": "bounce.example.com",
-    "dmarc_policy": "quarantine",
-    "dmarc_percentage": 100,
-    "created_at": "2025-12-29T10:30:00Z"
-  }
-]
+### Create domain
+
+```
+POST /api/domains
 ```
 
-### Create Domain
+Body:
 
-```http
-POST /api/domains
-Content-Type: application/json
-
+```json
 {
   "name": "example.com",
   "mail_host": "mail.example.com",
@@ -128,813 +262,711 @@ Content-Type: application/json
 }
 ```
 
-### Get Domain
+### Get / Update / Delete domain
 
-```http
-GET /api/domains/{id}
 ```
-
-### Update Domain
-
-```http
-PUT /api/domains/{id}
-Content-Type: application/json
-
-{
-  "dmarc_policy": "reject",
-  "dmarc_percentage": 100
-}
-```
-
-### Delete Domain
-
-```http
+GET    /api/domains/{id}
+PUT    /api/domains/{id}
 DELETE /api/domains/{id}
 ```
 
----
+### List senders for a domain
 
-## Senders
-
-### List Senders for Domain
-
-```http
+```
 GET /api/domains/{domainID}/senders
 ```
 
-**Response:**
-```json
-[
-  {
-    "id": 1,
-    "domain_id": 1,
-    "local_part": "newsletter",
-    "email": "newsletter@example.com",
-    "ip": "192.168.1.100",
-    "created_at": "2025-12-29T10:30:00Z"
-  }
-]
+### Create sender
+
+```
+POST /api/domains/{domainID}/senders
 ```
 
-### Create Sender
+Body:
 
-```http
-POST /api/domains/{domainID}/senders
-Content-Type: application/json
-
+```json
 {
   "local_part": "newsletter",
-  "ip": "192.168.1.100",
-  "smtp_password": "optional-smtp-auth-password"
+  "ip": "203.0.113.42"
 }
 ```
 
-### Setup Sender (Generate DKIM)
+The resulting sender email address is `local_part@domain.name`.
 
-```http
+### Get / Update / Delete sender
+
+```
+GET    /api/senders/{id}
+PUT    /api/senders/{id}
+DELETE /api/senders/{id}
+```
+
+### Run sender setup (DKIM generation)
+
+```
 POST /api/domains/{domainID}/senders/{id}/setup
 ```
 
----
-
-## Campaigns
-
-### List Campaigns
-
-```http
-GET /api/campaigns?status=draft&page=1&limit=20
-```
-
-**Query Parameters:**
-- `status`: filter by status (draft, scheduled, sending, completed, failed)
-- `page`: page number (default: 1)
-- `limit`: items per page (default: 20)
-
-**Response:**
-```json
-{
-  "campaigns": [
-    {
-      "id": 1,
-      "name": "Weekly Newsletter",
-      "subject": "This Week's Updates",
-      "status": "draft",
-      "sender_id": 1,
-      "list_id": 1,
-      "total_sent": 0,
-      "total_failed": 0,
-      "created_at": "2025-12-29T10:30:00Z"
-    }
-  ],
-  "total": 45,
-  "page": 1,
-  "limit": 20
-}
-```
-
-### Create Campaign
-
-```http
-POST /api/campaigns
-Content-Type: application/json
-
-{
-  "name": "Weekly Newsletter",
-  "subject": "This Week's Updates",
-  "body": "<html><body>Hello {{first_name}}!</body></html>",
-  "sender_id": 1,
-  "list_id": 1
-}
-```
-
-### Update Campaign
-
-```http
-PUT /api/campaigns/{id}
-Content-Type: application/json
-
-{
-  "subject": "Updated Subject Line",
-  "body": "<html>...</html>"
-}
-```
-
-### Send Campaign
-
-```http
-POST /api/campaigns/{id}/send
-```
-
-### Schedule Campaign
-
-```http
-POST /api/campaigns/{id}/schedule
-Content-Type: application/json
-
-{
-  "scheduled_for": "2025-12-30T09:00:00Z"
-}
-```
-
-### Get Campaign Statistics
-
-```http
-GET /api/campaigns/{id}/stats
-```
-
-**Response:**
-```json
-{
-  "total_recipients": 10000,
-  "sent": 9500,
-  "failed": 100,
-  "skipped": 400,
-  "opens": 3200,
-  "unique_opens": 2800,
-  "clicks": 450,
-  "unique_clicks": 380,
-  "bounces": 50,
-  "unsubscribes": 15
-}
-```
+Generates a DKIM key pair, writes the private key to the KumoMTA DKIM directory, and
+returns the public key DNS record to publish.
 
 ---
 
-## Templates
+## Campaigns V2
 
-### List Templates
+All campaign endpoints are scoped to an organization. Include the organization ID in
+requests where required.
 
-```http
-GET /api/templates?category=newsletter&search=welcome
+### List campaigns
+
+```
+GET /api/v2/campaigns
 ```
 
-### Create Template
+Query parameters: `page`, `per_page`, `status` (draft|scheduled|sending|completed|failed).
 
-```http
-POST /api/templates
-Content-Type: application/json
+### Campaign statistics summary
 
-{
-  "name": "Welcome Email",
-  "subject": "Welcome to {{company_name}}!",
-  "html_content": "<html>...</html>",
-  "text_content": "Plain text version...",
-  "category": "welcome"
-}
+```
+GET /api/v2/campaigns/stats
 ```
 
-### Preview Template
+Returns aggregated totals across all campaigns: total sent, total opens, total clicks,
+average open rate, average click rate.
 
-```http
-POST /api/templates/{id}/preview
-Content-Type: application/json
+### Create campaign
 
-{
-  "first_name": "John",
-  "last_name": "Doe",
-  "company_name": "Acme Inc"
-}
+```
+POST /api/v2/campaigns
 ```
 
-**Response:**
+Body:
+
 ```json
 {
-  "html": "<html>rendered content...</html>",
-  "subject": "Welcome to Acme Inc!"
+  "name": "March Newsletter",
+  "subject": "What is new in March",
+  "body": "<h1>Hello {{first_name}}</h1>...",
+  "sender_id": 3,
+  "organization_id": 1,
+  "scheduled_at": "2025-03-01T09:00:00Z"
 }
 ```
 
-### Clone Template
+Leave `scheduled_at` empty to keep the campaign as a draft.
 
-```http
-POST /api/templates/{id}/clone
+### Get / Update / Delete campaign
+
 ```
+GET    /api/v2/campaigns/{id}
+PUT    /api/v2/campaigns/{id}
+DELETE /api/v2/campaigns/{id}
+```
+
+Deletion is only permitted for campaigns in `draft` status.
+
+### Preview campaign
+
+```
+POST /api/v2/campaigns/{id}/preview
+```
+
+Body:
+
+```json
+{ "email": "test@example.com" }
+```
+
+Sends a rendered preview to the specified address using the first contact in the
+recipient list for variable substitution.
 
 ---
 
-## Contacts & Lists
+## Contact Lists V2
 
-### List Contact Lists
+### List all subscriber lists
 
-```http
-GET /api/lists
+```
+GET /api/v2/lists
 ```
 
-### Create List
+### Create list
 
-```http
-POST /api/lists
-Content-Type: application/json
+```
+POST /api/v2/lists
+```
 
+Body:
+
+```json
 {
   "name": "Newsletter Subscribers",
-  "description": "Main newsletter list"
+  "description": "Main newsletter list",
+  "organization_id": 1
 }
 ```
 
-### Import Contacts (CSV)
+### Get / Update / Delete list
 
-```http
-POST /api/lists/{id}/import
-Content-Type: multipart/form-data
-
-file: <CSV file>
+```
+GET    /api/v2/lists/{id}
+PUT    /api/v2/lists/{id}
+DELETE /api/v2/lists/{id}
 ```
 
-**CSV Format:**
-```csv
-email,first_name,last_name
-john@example.com,John,Doe
-jane@example.com,Jane,Smith
+### List subscribers in a list
+
+```
+GET /api/v2/lists/{id}/subscribers
 ```
 
-### Get List Contacts
+Query parameters: `page`, `per_page`, `status` (active|unsubscribed|bounced).
 
-```http
-GET /api/lists/{id}/contacts?page=1&limit=50
+### Add subscriber to a list
+
+```
+POST /api/v2/lists/{id}/subscribers
 ```
 
----
+Body:
 
-## Tags & Segments
-
-### List Tags
-
-```http
-GET /api/tags
-```
-
-**Response:**
 ```json
-[
-  {
-    "id": 1,
-    "name": "VIP",
-    "color": "#FF5733",
-    "subscriber_count": 150
-  }
-]
-```
-
-### Create Tag
-
-```http
-POST /api/tags
-Content-Type: application/json
-
 {
-  "name": "VIP",
-  "color": "#FF5733"
+  "email": "contact@example.com",
+  "first_name": "Jane",
+  "last_name": "Smith"
 }
 ```
 
-### Add Tags to Subscriber
+### Remove subscriber from list
 
-```http
-POST /api/subscribers/{id}/tags
-Content-Type: application/json
-
-{
-  "tag_ids": [1, 2, 3]
-}
+```
+DELETE /api/v2/lists/{id}/subscribers/{contactId}
 ```
 
-### Create Segment
+### Import subscribers
 
-```http
-POST /api/segments
-Content-Type: application/json
-
-{
-  "name": "Active VIPs",
-  "description": "VIP customers who opened email in last 30 days",
-  "conditions": [
-    {
-      "field": "tag",
-      "operator": "equals",
-      "value": "VIP"
-    },
-    {
-      "field": "last_open",
-      "operator": "within_days",
-      "value": "30",
-      "combiner": "and"
-    }
-  ]
-}
+```
+POST /api/v2/lists/{id}/import
+Content-Type: multipart/form-data
 ```
 
-### Get Segment Subscribers
+Upload a CSV file. Required columns: `email`. Optional: `first_name`, `last_name`,
+`phone`, `company`, and any custom field names.
 
-```http
-GET /api/segments/{id}/subscribers?page=1&limit=50
+Maximum file size: 50 MB.
+
+### Export subscribers
+
 ```
+GET /api/v2/lists/{id}/export
+```
+
+Returns a CSV download of all active subscribers in the list.
+
+### Get list statistics
+
+```
+GET /api/v2/lists/{id}/stats
+```
+
+Returns subscriber counts broken down by status.
 
 ---
 
-## Email Verification
+## Contacts and Import
 
-### Verify Single Email
+### Verify a single email address
 
-```http
+```
 POST /api/contacts/verify
-Content-Type: application/json
-
-{
-  "email": "test@example.com"
-}
 ```
 
-**Response:**
+Rate-limited.
+
+Body:
+
+```json
+{ "email": "test@example.com" }
+```
+
+Response:
+
 ```json
 {
   "email": "test@example.com",
-  "is_valid": true,
-  "mx_found": true,
-  "smtp_check": "deliverable",
+  "is_reachable": "safe",
+  "risk_score": 12,
   "is_disposable": false,
-  "is_role": false,
-  "suggestion": null
+  "is_role_account": false,
+  "is_catch_all": false
 }
 ```
 
-### Verify Batch
+### Batch verify emails
 
-```http
+```
 POST /api/contacts/verify-batch
-Content-Type: application/json
-
-{
-  "emails": [
-    "test1@example.com",
-    "test2@example.com"
-  ]
-}
 ```
 
-### Clean List
+Body:
 
-```http
+```json
+{ "emails": ["a@example.com", "b@example.com"] }
+```
+
+### Clean a list (verify all contacts)
+
+```
 POST /api/lists/{id}/clean
 ```
 
----
+Triggers verification of all unverified contacts in the list. Runs asynchronously.
+Invalid addresses are added to the suppression list automatically.
 
-## Analytics
+### CSV import (synchronous, up to 1 MB)
 
-### Dashboard Overview
-
-```http
-GET /api/analytics/dashboard?days=7
+```
+POST /api/import/csv
+Content-Type: multipart/form-data
 ```
 
-**Response:**
-```json
-{
-  "overview": {
-    "total_subscribers": 50000,
-    "total_campaigns": 120,
-    "total_sent": 1500000,
-    "total_domains": 5
-  },
-  "period": {
-    "days": 7,
-    "sent": 25000,
-    "opens": 8500,
-    "clicks": 1200,
-    "bounces": 150,
-    "unsubscribes": 45
-  },
-  "rates": {
-    "open_rate": 34.0,
-    "click_rate": 4.8,
-    "bounce_rate": 0.6
-  },
-  "deliverability_score": 94,
-  "daily_stats": [...]
-}
+### CSV import (asynchronous, up to 50 MB)
+
+```
+POST /api/import/csv/async
+Content-Type: multipart/form-data
 ```
 
-### Campaign Analytics
+Returns a job ID.
 
-```http
-GET /api/analytics/campaigns/{id}
+### Check import status
+
+```
+GET /api/import/status/{jobId}
 ```
 
-### Deliverability Report
-
-```http
-GET /api/analytics/deliverability?days=30
-```
+Returns progress: total rows, imported, skipped (invalid or suppressed), errors.
 
 ---
 
-## Suppressions
+## Templates V2
 
-### List Suppressions
+### List templates
 
-```http
-GET /api/suppressions?reason=hard_bounce&page=1
+```
+GET /api/v2/templates
 ```
 
-### Add Suppression
+### Create template
 
-```http
-POST /api/suppressions
-Content-Type: application/json
-
-{
-  "email": "bounce@example.com",
-  "reason": "hard_bounce",
-  "source": "manual"
-}
+```
+POST /api/v2/templates
 ```
 
-### Remove Suppression
+Body:
 
-```http
-DELETE /api/suppressions/{id}
-```
-
-### Bulk Check
-
-```http
-POST /api/suppressions/check
-Content-Type: application/json
-
-{
-  "emails": ["test1@example.com", "test2@example.com"]
-}
-```
-
----
-## Proxy Management
-
-### List Proxies
-
-```http
-GET /api/proxies
-```
-
-**Response:**
-```json
-[
-  {
-    "id": 1,
-    "host": "1.2.3.4",
-    "port": 1080,
-    "protocol": "socks5",
-    "username": "user",
-    "enabled": true,
-    "failure_count": 0
-  }
-]
-```
-
-### Create Proxy
-
-```http
-POST /api/proxies
-Content-Type: application/json
-
-{
-  "host": "1.2.3.4",
-  "port": 1080,
-  "protocol": "socks5",
-  "username": "optional_user",
-  "password": "optional_password"
-}
-```
-
-### Update Proxy
-
-```http
-PUT /api/proxies/{id}
-Content-Type: application/json
-
-{
-  "enabled": false,
-  "port": 1081
-}
-```
-
-### Test Proxy
-
-```http
-POST /api/proxies/{id}/test
-```
-
-### Delete Proxy
-
-```http
-DELETE /api/proxies/{id}
-```
-
----
-
-## System
-
-### Health Check
-
-```http
-GET /api/system/health
-```
-
-**Response:**
 ```json
 {
-  "status": "healthy",
-  "version": "1.0.0",
-  "uptime": "72h15m30s",
-  "database": "connected",
-  "kumomta": "running"
+  "name": "Welcome Email",
+  "subject": "Welcome to {{company_name}}",
+  "html_content": "<html>...</html>",
+  "organization_id": 1
 }
 ```
 
-### Queue Status
+### Get / Update / Delete template
 
-```http
-GET /api/queue/stats
+```
+GET    /api/v2/templates/{id}
+PUT    /api/v2/templates/{id}
+DELETE /api/v2/templates/{id}
 ```
 
-### DNS Records
+### Built-in template library
 
-```http
-GET /api/dns/{domainID}
+```
+GET /api/v2/templates/library
+GET /api/v2/templates/library/{templateId}
 ```
 
-**Response:**
+Returns the set of built-in starter templates that ship with SampMail.
+
+### Preview template
+
+```
+POST /api/v2/templates/{id}/preview
+```
+
+Body:
+
 ```json
 {
-  "spf": {
-    "name": "example.com",
-    "type": "TXT",
-    "value": "v=spf1 ip4:192.168.1.100 -all"
-  },
-  "dkim": {
-    "name": "newsletter._domainkey.example.com",
-    "type": "TXT",
-    "value": "v=DKIM1; k=rsa; p=MIIBIjAN..."
-  },
-  "dmarc": {
-    "name": "_dmarc.example.com",
-    "type": "TXT",
-    "value": "v=DMARC1; p=quarantine; pct=100"
-  }
+  "variables": { "first_name": "Jane", "company_name": "Acme" }
 }
 ```
 
 ---
 
-## Error Responses
+## Suppressions V2
 
-All errors follow this format:
-
-```json
-{
-  "error": "Error message here",
-  "code": "ERROR_CODE",
-  "details": {}
-}
-```
-
-### HTTP Status Codes
-
-| Code | Meaning |
-|------|---------|
-| 200 | Success |
-| 201 | Created |
-| 400 | Bad Request - Invalid input |
-| 401 | Unauthorized - Invalid/missing token |
-| 403 | Forbidden - Insufficient permissions |
-| 404 | Not Found |
-| 409 | Conflict - Resource already exists |
-| 422 | Unprocessable Entity - Validation error |
-| 429 | Too Many Requests - Rate limited |
-| 500 | Internal Server Error |
-
----
-
-## Rate Limits
-
-| Endpoint | Limit |
-|----------|-------|
-| Authentication | 5 req/sec |
-| Email Verification | 2 req/sec |
-| General API | 100 req/sec |
-
-Rate limit headers are included in responses:
+### List suppressions
 
 ```
-X-RateLimit-Limit: 100
-X-RateLimit-Remaining: 95
-X-RateLimit-Reset: 1705312800
+GET /api/v2/suppressions
 ```
 
----
+Query parameters: `page`, `per_page`, `reason`.
 
-## Webhooks (Outgoing)
-
-Configure webhook endpoints in Settings to receive real-time events:
-
-### Event Types
-
-- `campaign.started`
-- `campaign.completed`
-- `email.sent`
-- `email.opened`
-- `email.clicked`
-- `email.bounced`
-- `email.unsubscribed`
-- `email.complained`
-
-### Payload Format
-
-```json
-{
-  "event": "email.opened",
-  "timestamp": "2025-12-29T10:30:00Z",
-  "data": {
-    "campaign_id": 1,
-    "recipient_id": 12345,
-    "email": "user@example.com"
-  }
-}
-```
-
-### Webhook Signature
-
-Verify authenticity using HMAC-SHA256:
+### Add suppression
 
 ```
-X-Webhook-Signature: sha256=abc123...
+POST /api/v2/suppressions
 ```
 
-```python
-import hmac
-import hashlib
+Body:
 
-def verify_signature(payload, signature, secret):
-    expected = hmac.new(
-        secret.encode(),
-        payload.encode(),
-        hashlib.sha256
-    ).hexdigest()
-    return hmac.compare_digest(f"sha256={expected}", signature)
-```
-
----
-
-## Internal Policy API (KumoMTA Integration)
-
-> **Note**: These endpoints are restricted to localhost only. They are designed for KumoMTA Lua scripts to query dynamic policies.
-
-### Get Sending IPs
-
-```http
-GET /api/internal/policy/sending-ips
-```
-
-**Response:**
-```json
-[
-  {
-    "ip_address": "192.168.1.100",
-    "hostname": "mail1.example.com",
-    "warmup_stage": 3,
-    "daily_send_limit": 5000,
-    "today_sent": 1234,
-    "reputation_score": 95.5,
-    "is_active": true
-  }
-]
-```
-
-### Get Domains
-
-```http
-GET /api/internal/policy/domains
-```
-
-**Response:**
-```json
-[
-  {
-    "name": "example.com",
-    "dkim_selector": "default",
-    "warmup_enabled": true,
-    "rate_limit": "500/h",
-    "max_per_hour": 500
-  }
-]
-```
-
-### Get Sender Rate
-
-```http
-GET /api/internal/policy/sender-rate?email=sender@example.com
-```
-
-**Response:**
-```json
-{
-  "email": "sender@example.com",
-  "rate_limit": "100/h",
-  "warmup_day": 5,
-  "max_per_hour": 100,
-  "egress_pool": "example.com__sender",
-  "is_active": true
-}
-```
-
-### Log Delivery Event
-
-```http
-POST /api/internal/policy/log-event
-Content-Type: application/json
-
-{
-  "message_id": "abc123",
-  "recipient": "user@example.com",
-  "sender": "sender@example.com",
-  "domain": "example.com",
-  "event_type": "delivered",
-  "status_code": "250",
-  "diagnostic": "OK",
-  "timestamp": 1704499200
-}
-```
-
-### Check Suppression
-
-```http
-GET /api/internal/policy/suppression-check?email=user@example.com
-```
-
-**Response:**
 ```json
 {
   "email": "user@example.com",
-  "suppressed": true,
-  "reason": "hard_bounce"
+  "reason": "manual",
+  "organization_id": 1
 }
+```
+
+### Remove suppression
+
+```
+DELETE /api/v2/suppressions/{id}
 ```
 
 ---
 
-## Environment Variables
+## Automations V2
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SAMPMAIL_SECRET` | (required) | App secret key (min 32 chars) |
-| `SAMPMAIL_LISTEN_ADDR` | `127.0.0.1:9000` | API listen address |
-| `SAMPMAIL_DB_DRIVER` | `sqlite` | Database driver (sqlite, postgres) |
-| `SAMPMAIL_PG_HOST` | `localhost` | PostgreSQL host |
-| `SAMPMAIL_PG_PORT` | `5432` | PostgreSQL port |
-| `SAMPMAIL_PG_USER` | - | PostgreSQL username |
-| `SAMPMAIL_PG_PASSWORD` | - | PostgreSQL password |
-| `SAMPMAIL_PG_DATABASE` | - | PostgreSQL database name |
-| `SAMPMAIL_REDIS_ADDR` | - | Redis address (optional, for scaling) |
-| `SAMPMAIL_KUMO_API_URL` | `http://127.0.0.1:8000` | KumoMTA HTTP API URL |
-| `REACHER_URL` | `http://reacher:8080` | Email verification service URL |
+### List automations
 
+```
+GET /api/v2/automations
+```
+
+### Create automation
+
+```
+POST /api/v2/automations
+```
+
+Body:
+
+```json
+{
+  "name": "Welcome Series",
+  "trigger_type": "subscribe",
+  "trigger_config": { "list_id": 5 },
+  "organization_id": 1,
+  "nodes": [...],
+  "edges": [...]
+}
+```
+
+The `nodes` and `edges` fields use the React Flow JSON format as produced by the
+visual automation builder in the UI.
+
+### Get / Update / Delete automation
+
+```
+GET    /api/v2/automations/{id}
+PUT    /api/v2/automations/{id}
+DELETE /api/v2/automations/{id}
+```
+
+### Activate / Pause automation
+
+```
+POST /api/v2/automations/{id}/activate
+POST /api/v2/automations/{id}/pause
+```
+
+### Get automation statistics
+
+```
+GET /api/v2/automations/{id}/stats
+```
+
+Returns counts: contacts entered, currently active, completed, failed.
+
+### Get automation runs
+
+```
+GET /api/v2/automations/{id}/runs
+```
+
+Returns individual contact execution records with status and current node.
+
+---
+
+## Webhooks V2
+
+### List webhooks
+
+```
+GET /api/v2/webhooks
+```
+
+### Create webhook
+
+```
+POST /api/v2/webhooks
+```
+
+Body:
+
+```json
+{
+  "url": "https://hooks.example.com/endpoint",
+  "is_active": true,
+  "organization_id": 1
+}
+```
+
+### Update / Delete webhook
+
+```
+PUT    /api/v2/webhooks/{id}
+DELETE /api/v2/webhooks/{id}
+```
+
+### Test webhook URL
+
+```
+POST /api/v2/webhooks/test
+```
+
+Body:
+
+```json
+{ "url": "https://hooks.example.com/endpoint" }
+```
+
+Sends a test payload and returns the HTTP response code and body.
+
+---
+
+## Analytics V2
+
+### Dashboard analytics
+
+```
+GET /api/v2/analytics/dashboard
+```
+
+Returns time-series data for sends, opens, clicks, bounces, and complaints over the
+last 30 days, scoped to the organization.
+
+### Deliverability metrics
+
+```
+GET /api/v2/analytics/deliverability
+```
+
+Returns per-domain deliverability statistics: sent count, open rate, bounce rate,
+complaint rate.
+
+---
+
+## Organizations (Superadmin)
+
+Requires `is_super_admin: true`.
+
+### List all organizations
+
+```
+GET /api/v2/admin/organizations
+```
+
+### Create organization
+
+```
+POST /api/v2/admin/organizations
+```
+
+Body:
+
+```json
+{
+  "name": "Acme Corp",
+  "slug": "acme",
+  "plan": "pro"
+}
+```
+
+### Delete organization
+
+```
+DELETE /api/v2/admin/organizations/{id}
+```
+
+### Get organization members
+
+```
+GET /api/v2/admin/organizations/{id}/members
+```
+
+---
+
+## Users (Superadmin)
+
+### List users
+
+```
+GET /api/admin/users
+```
+
+### Create user
+
+```
+POST /api/admin/users
+```
+
+Body:
+
+```json
+{
+  "email": "user@example.com",
+  "password": "secure-password",
+  "is_super_admin": false
+}
+```
+
+### Update / Delete user
+
+```
+PUT    /api/admin/users/{id}
+DELETE /api/admin/users/{id}
+```
+
+### Assign user to organization
+
+```
+POST /api/admin/users/{id}/organizations
+```
+
+Body:
+
+```json
+{
+  "organization_id": 2,
+  "role": "admin"
+}
+```
+
+Valid roles: `owner`, `admin`, `editor`, `viewer`.
+
+### Remove user from organization
+
+```
+DELETE /api/admin/users/{id}/organizations/{org_id}
+```
+
+---
+
+## System and Health
+
+### Health endpoints (no authentication required)
+
+```
+GET /health         Full health status of all subsystems.
+GET /health/live    Kubernetes liveness probe. Returns 200 if the process is running.
+GET /health/ready   Kubernetes readiness probe. Returns 200 when the database is connected.
+```
+
+### Detailed system health
+
+```
+GET /api/system/health
+```
+
+Returns status of: database, SMTP pool, Redis, Reacher, KumoMTA.
+
+### Version information
+
+```
+GET /api/version
+```
+
+Response:
+
+```json
+{
+  "version": "0.1.12",
+  "build_time": "2025-01-15T10:30:00Z",
+  "git_commit": "a1b2c3d"
+}
+```
+
+### Prometheus metrics
+
+```
+GET /metrics
+```
+
+Standard Prometheus text format. Scraped by Prometheus or compatible systems.
+
+---
+
+## Tracking Endpoints
+
+These endpoints are public (no authentication) and rate-limited.
+
+### Track email open
+
+```
+GET /api/track/open/{recipientID}?sig={hmac}
+```
+
+Returns a 1x1 transparent GIF. The HMAC signature is validated. An invalid or missing
+signature returns 403 without recording the event.
+
+### Track link click
+
+```
+GET /api/track/click/{recipientID}?url={base64-encoded-url}&sig={hmac}
+```
+
+Validates the HMAC signature, records the click event, then issues a 302 redirect to
+the original URL. An invalid signature returns 403.
+
+### Unsubscribe page
+
+```
+GET  /api/unsubscribe/{token}   Returns the unsubscribe confirmation page.
+POST /api/unsubscribe/{token}   Confirms the unsubscribe and adds to suppression list.
+```
+
+---
+
+## Error Format
+
+All errors return a JSON body with an `error` field:
+
+```json
+{
+  "error": "invalid credentials"
+}
+```
+
+**HTTP status codes used:**
+
+| Code | Meaning |
+|---|---|
+| 200 | Success |
+| 201 | Created |
+| 204 | Success, no content (used for DELETE) |
+| 400 | Bad request — invalid input |
+| 401 | Unauthorized — missing or invalid session token |
+| 403 | Forbidden — authenticated but not permitted |
+| 404 | Not found |
+| 409 | Conflict — e.g. duplicate email |
+| 422 | Unprocessable entity — validation failed |
+| 429 | Too many requests — rate limited |
+| 500 | Internal server error |

@@ -25,7 +25,12 @@ type WarmupDTO struct {
 // GET /api/warmup
 // Returns a list of all senders + their current warmup status/rate
 func (s *Server) handleGetWarmupList(w http.ResponseWriter, r *http.Request) {
-	domains, err := s.Store.ListDomains()
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
+	// orgID=0: warmup list is superadmin-only (lists all domains)
+	domains, err := s.Store.ListDomains(0)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list domains"})
 		return
@@ -64,6 +69,10 @@ func (s *Server) handleGetWarmupList(w http.ResponseWriter, r *http.Request) {
 // POST /api/warmup/{id}
 // Toggles warmup on/off or changes the plan for a specific sender
 func (s *Server) handleUpdateWarmup(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, _ := strconv.Atoi(idStr)
 

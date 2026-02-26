@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import EmailTemplateBuilder from '../components/EmailTemplateBuilder';
-import { Mail, Rocket, Sparkles, Lightbulb, ArrowLeft, Plus } from 'lucide-react';
+import { Mail, Rocket, Sparkles, Lightbulb, ArrowLeft, Plus, Send } from 'lucide-react';
 import ConfirmationModal from '../components/ConfirmationModal';
-import { getAuthHeaders } from '../api';
+import { getAuthHeaders, sendCampaign } from '../api';
 
 const CampaignsPage = () => {
     const [campaigns, setCampaigns] = useState([]);
@@ -10,6 +10,8 @@ const CampaignsPage = () => {
     const [view, setView] = useState('list'); // list, create, edit
     const [selectedCampaign, setSelectedCampaign] = useState(null);
     const [deleteId, setDeleteId] = useState(null);
+    const [sendConfirmCampaign, setSendConfirmCampaign] = useState(null);
+    const [sending, setSending] = useState(false);
 
     useEffect(() => {
         fetchCampaigns();
@@ -18,7 +20,7 @@ const CampaignsPage = () => {
     const fetchCampaigns = async () => {
         try {
             const res = await fetch('/api/v2/campaigns', {
-                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
+                headers: getAuthHeaders(),
             });
             const data = await res.json();
             setCampaigns(data || []);
@@ -35,6 +37,7 @@ const CampaignsPage = () => {
             scheduled: 'bg-blue-100 text-blue-600',
             sending: 'bg-yellow-100 text-yellow-600',
             sent: 'bg-green-100 text-green-600',
+            completed: 'bg-green-100 text-green-600',
             paused: 'bg-orange-100 text-orange-600',
             failed: 'bg-red-100 text-red-600',
         };
@@ -60,13 +63,26 @@ const CampaignsPage = () => {
         try {
             await fetch(`/api/v2/campaigns/${deleteId}`, {
                 method: 'DELETE',
-                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
+                headers: getAuthHeaders(),
             });
             fetchCampaigns();
         } catch (error) {
             console.error(error);
         }
         setDeleteId(null);
+    };
+
+    const confirmSend = async () => {
+        if (!sendConfirmCampaign) return;
+        setSending(true);
+        try {
+            await sendCampaign(sendConfirmCampaign.id);
+            fetchCampaigns();
+        } catch (error) {
+            console.error('Failed to send campaign:', error);
+        }
+        setSending(false);
+        setSendConfirmCampaign(null);
     };
 
     if (view === 'create') {
@@ -150,19 +166,27 @@ const CampaignsPage = () => {
                                         <div className="flex gap-4 text-xs">
                                             <div>
                                                 <span className="block text-gray-500">Sent</span>
-                                                <span className="font-semibold dark:text-gray-200">{campaign.sent_count || 0}</span>
+                                                <span className="font-semibold dark:text-gray-200">{campaign.total_sent || campaign.sent_count || 0}</span>
                                             </div>
                                             <div>
                                                 <span className="block text-gray-500">Opens</span>
-                                                <span className="font-semibold text-green-600">{campaign.opened_count || 0}</span>
+                                                <span className="font-semibold text-green-600">{campaign.total_opens || campaign.opened_count || 0}</span>
                                             </div>
                                             <div>
                                                 <span className="block text-gray-500">Clicks</span>
-                                                <span className="font-semibold text-blue-600">{campaign.clicked_count || 0}</span>
+                                                <span className="font-semibold text-blue-600">{campaign.total_clicks || campaign.clicked_count || 0}</span>
                                             </div>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-right space-x-3">
+                                        {campaign.status === 'draft' && (
+                                            <button
+                                                onClick={() => setSendConfirmCampaign(campaign)}
+                                                className="text-green-600 hover:text-green-800 font-medium inline-flex items-center gap-1"
+                                            >
+                                                <Send className="w-3 h-3" /> Send
+                                            </button>
+                                        )}
                                         <button onClick={() => handleEdit(campaign)} className="text-blue-600 hover:text-blue-800 font-medium">Edit</button>
                                         <button onClick={() => handleDeleteClick(campaign.id)} className="text-red-600 hover:text-red-800 font-medium">Delete</button>
                                     </td>
@@ -181,6 +205,16 @@ const CampaignsPage = () => {
                 message="Are you sure you want to delete this campaign? This action cannot be undone."
                 confirmText="Delete"
                 type="danger"
+            />
+
+            <ConfirmationModal
+                isOpen={!!sendConfirmCampaign}
+                onClose={() => setSendConfirmCampaign(null)}
+                onConfirm={confirmSend}
+                title="Send Campaign"
+                message={`Are you sure you want to send "${sendConfirmCampaign?.name}"? This will immediately start sending to all subscribers in the campaign's list.`}
+                confirmText={sending ? "Sending..." : "Send Now"}
+                type="primary"
             />
         </div>
     );
@@ -207,8 +241,7 @@ const CampaignWizard = ({ campaign, onCancel, onSave }) => {
             await fetch(url, {
                 method,
                 headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('sampmail_token')}`,
+                    ...getAuthHeaders(),
                 },
                 body: JSON.stringify(form),
             });

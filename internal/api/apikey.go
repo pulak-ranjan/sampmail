@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/pulak-ranjan/sampmail/internal/models"
+	"github.com/pulak-ranjan/sampmail/internal/store"
 )
 
 // hashAPIKey returns SHA256 hash of the API key
@@ -62,8 +63,13 @@ func HasScope(apiKey *models.APIKey, requiredScope string) bool {
 
 // handleListKeys returns all API keys with masked values
 func (s *Server) handleListKeys(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	var keys []models.APIKey
-	if err := s.Store.DB.Find(&keys).Error; err != nil {
+	if err := s.Store.DB.Scopes(store.WithOrgFilterScope(orgID)).Find(&keys).Error; err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
 		return
 	}
@@ -95,6 +101,11 @@ func (s *Server) handleListKeys(w http.ResponseWriter, r *http.Request) {
 
 // handleCreateKey creates a new API key
 func (s *Server) handleCreateKey(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	var req struct {
 		Name   string `json:"name"`
 		Scopes string `json:"scopes"`
@@ -130,10 +141,11 @@ func (s *Server) handleCreateKey(w http.ResponseWriter, r *http.Request) {
 	keyHash := hashAPIKey(keyStr)
 
 	apiKey := &models.APIKey{
-		Name:      req.Name,
-		Key:       keyHash,
-		Scopes:    req.Scopes,
-		CreatedAt: time.Now(),
+		Name:           req.Name,
+		Key:            keyHash,
+		Scopes:         req.Scopes,
+		OrganizationID: orgID,
+		CreatedAt:      time.Now(),
 	}
 
 	if err := s.Store.DB.Create(apiKey).Error; err != nil {
@@ -153,8 +165,25 @@ func (s *Server) handleCreateKey(w http.ResponseWriter, r *http.Request) {
 
 // handleDeleteKey deletes an API key by ID
 func (s *Server) handleDeleteKey(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, _ := strconv.Atoi(idStr)
+
+	// Verify ownership before delete
+	var key models.APIKey
+	if err := s.Store.DB.First(&key, id).Error; err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "key not found"})
+		return
+	}
+
+	if orgID > 0 && key.OrganizationID != orgID {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "access denied"})
+		return
+	}
 
 	if err := s.Store.DB.Delete(&models.APIKey{}, id).Error; err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to delete"})

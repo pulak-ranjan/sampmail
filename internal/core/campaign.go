@@ -12,6 +12,7 @@ import (
 	"net/smtp"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -39,11 +40,12 @@ func NewCampaignService(st *store.Store) *CampaignService {
 
 // recipientJob represents a single email to send
 type recipientJob struct {
-	Recipient models.CampaignRecipient
-	Campaign  models.Campaign
-	Sender    models.Sender
-	BaseURL   string
-	Subject   string
+	Recipient    models.CampaignRecipient
+	Campaign     models.Campaign
+	Sender       models.Sender
+	BaseURL      string  // tracking base URL
+	UnsubBaseURL string  // unsubscribe base URL (may differ from tracking)
+	Subject      string
 }
 
 // SendResult tracks the outcome of a send attempt
@@ -58,6 +60,13 @@ type SendResult struct {
 func (cs *CampaignService) ImportRecipientsFromCSV(campaignID uint, r io.Reader) error {
 	log := logger.CampaignLogger(campaignID)
 	cfg := config.Get()
+
+	// Get org context for suppression checks
+	var campaign models.Campaign
+	var orgID uint
+	if err := cs.Store.DB.First(&campaign, campaignID).Error; err == nil {
+		orgID = campaign.OrganizationID
+	}
 
 	reader := csv.NewReader(r)
 	batchSize := cfg.ImportBatchSize
@@ -114,7 +123,7 @@ func (cs *CampaignService) ImportRecipientsFromCSV(campaignID uint, r io.Reader)
 		// Batch insert when we hit the threshold
 		if len(recipients) >= batchSize {
 			// Check suppression list before inserting
-			suppressedMap, _ := cs.Store.BulkCheckSuppressed(emailBatch)
+			suppressedMap, _ := cs.Store.BulkCheckSuppressed(orgID, emailBatch)
 
 			var validRecipients []models.CampaignRecipient
 			for _, rec := range recipients {
@@ -140,7 +149,7 @@ func (cs *CampaignService) ImportRecipientsFromCSV(campaignID uint, r io.Reader)
 
 	// Insert remaining recipients (with suppression check)
 	if len(recipients) > 0 {
-		suppressedMap, _ := cs.Store.BulkCheckSuppressed(emailBatch)
+		suppressedMap, _ := cs.Store.BulkCheckSuppressed(orgID, emailBatch)
 
 		var validRecipients []models.CampaignRecipient
 		for _, rec := range recipients {
@@ -260,14 +269,36 @@ func (cs *CampaignService) processCampaignWithPool(c models.Campaign) {
 	safeSubject := strings.ReplaceAll(c.Subject, "\r", "")
 	safeSubject = strings.ReplaceAll(safeSubject, "\n", "")
 
-	// Determine Base URL
-	baseURL := "http://localhost:9000"
-	if settings, err := cs.Store.GetSettings(); err == nil && settings.MainHostname != "" {
-		protocol := "https"
-		if settings.MainHostname == "localhost" {
-			protocol = "http"
+	// Determine Base URL with per-org custom domain support
+	baseURL := buildBaseURL(cs.Store, c.OrganizationID, "tracking")
+	unsubBaseURL := buildBaseURL(cs.Store, c.OrganizationID, "unsub")
+
+	// =====================================
+	// WARMUP INTEGRATION
+	// =====================================
+	// Check if sender is in warmup mode and apply rate limiting
+	var warmupTicker *time.Ticker
+	var warmupInterval time.Duration
+	
+	if sender.WarmupEnabled {
+		warmupRate := GetWarmupRateForSender(&sender)
+		warmupInterval = warmupRate.Interval
+		
+		log.Info("warmup mode enabled",
+			"day", sender.WarmupDay,
+			"plan", sender.WarmupPlan,
+			"rate", fmt.Sprintf("%d/hr", warmupRate.Count),
+			"interval", warmupInterval)
+		
+		// Set domain limiter warmup factor
+		if dl := GetDomainLimiter(); dl != nil {
+			warmupFactor := GetWarmupFactor(&sender)
+			dl.SetWarmupFactor(sender.Domain.Name, warmupFactor)
 		}
-		baseURL = fmt.Sprintf("%s://%s", protocol, settings.MainHostname)
+		
+		// Create ticker for warmup throttling
+		warmupTicker = time.NewTicker(warmupInterval)
+		defer warmupTicker.Stop()
 	}
 
 	// Create channels
@@ -360,7 +391,7 @@ func (cs *CampaignService) processCampaignWithPool(c models.Campaign) {
 		for i, r := range recipients {
 			emails[i] = r.Email
 		}
-		suppressedMap, _ := cs.Store.BulkCheckSuppressed(emails)
+		suppressedMap, _ := cs.Store.BulkCheckSuppressed(c.OrganizationID, emails)
 
 		for _, r := range recipients {
 			// Skip suppressed
@@ -373,12 +404,30 @@ func (cs *CampaignService) processCampaignWithPool(c models.Campaign) {
 				continue
 			}
 
+			// =====================================
+			// WARMUP & DOMAIN RATE LIMITING
+			// =====================================
+			// Wait for warmup ticker if enabled
+			if warmupTicker != nil {
+				<-warmupTicker.C
+			}
+			
+			// Check per-domain rate limit
+			destDomain := ExtractDomain(r.Email)
+			if allowed, waitTime, err := CheckDomainRateLimit(ctx, destDomain); err == nil && !allowed {
+				log.Debug("domain rate limit reached, waiting",
+					"domain", destDomain,
+					"wait_time", waitTime)
+				time.Sleep(waitTime)
+			}
+
 			jobs <- recipientJob{
-				Recipient: r,
-				Campaign:  c,
-				Sender:    sender,
-				BaseURL:   baseURL,
-				Subject:   safeSubject,
+				Recipient:    r,
+				Campaign:     c,
+				Sender:       sender,
+				BaseURL:      baseURL,
+				UnsubBaseURL: unsubBaseURL,
+				Subject:      safeSubject,
 			}
 		}
 
@@ -499,27 +548,85 @@ func (cs *CampaignService) sendSingleRecipient(client *smtp.Client, job recipien
 		return result
 	}
 
-	// Build message
+	// Build message with proper headers and personalization
 	unsubToken := generateUnsubToken(job.Recipient.ID)
-	unsubURL := fmt.Sprintf("%s/api/unsubscribe/%s", job.BaseURL, unsubToken)
+	unsubURL := fmt.Sprintf("%s/api/unsubscribe/%s", job.UnsubBaseURL, unsubToken)
 
-	trackingOpenURL := fmt.Sprintf("%s/api/track/open/%d", job.BaseURL, job.Recipient.ID)
+	openID := strconv.FormatUint(uint64(job.Recipient.ID), 10)
+	openSig := SignLink(openID)
+	trackingOpenURL := fmt.Sprintf("%s/api/track/open/%d?sig=%s", job.BaseURL, job.Recipient.ID, openSig)
 	pixel := fmt.Sprintf(`<img src="%s" alt="" width="1" height="1" style="display:none" />`, trackingOpenURL)
 
-	bodyWithLinks := rewriteLinks(job.Campaign.Body, job.BaseURL, job.Recipient.ID)
-	bodyFinal := bodyWithLinks + "\n" + pixel
-
+	// Apply personalization to email body
+	pe := NewPersonalizationEngine()
+	
+	// Build personalization context
+	ctx := &PersonalizationContext{
+		CustomData: map[string]interface{}{
+			"email": job.Recipient.Email,
+		},
+		UnsubscribeURL: unsubURL,
+		TrackingPixel:  pixel,
+		CurrentDate:    time.Now(),
+	}
+	
+	// Try to load contact data for personalization
+	if job.Recipient.ContactID > 0 {
+		var contact models.ContactV2
+		if err := cs.Store.DB.First(&contact, job.Recipient.ContactID).Error; err == nil {
+			ctx.Contact = &contact
+			// Mirror common fields into CustomData for templates using direct variables.
+			ctx.CustomData["first_name"] = contact.FirstName
+			ctx.CustomData["last_name"] = contact.LastName
+			ctx.CustomData["company"] = contact.Company
+		}
+	}
+	
+	// Render personalized content
+	personalizedBody, err := pe.Render(job.Campaign.Body, ctx)
+	if err != nil {
+		// Log but continue with original body
+		personalizedBody = job.Campaign.Body
+	}
+	
+	// Rewrite links for tracking
+	bodyWithLinks := rewriteLinks(personalizedBody, job.BaseURL, job.Recipient.ID)
+	
+	// Generate plain text version from HTML
+	textBody := htmlToPlainText(bodyWithLinks)
+	
+	// Build multipart message
+	boundary := fmt.Sprintf("----=_Part_%d_%d", job.Recipient.ID, time.Now().UnixNano())
+	messageID := fmt.Sprintf("<%d.%d@%s>", job.Recipient.ID, time.Now().UnixNano(), senderDomainForMessageID(job.Sender.Email))
+	
+	// Build headers with all required fields
 	headers := fmt.Sprintf("From: %s\r\n"+
 		"To: %s\r\n"+
 		"Subject: %s\r\n"+
+		"Message-ID: %s\r\n"+
+		"Date: %s\r\n"+
+		"MIME-Version: 1.0\r\n"+
 		"X-Campaign: %d\r\n"+
 		"List-Unsubscribe: <%s>\r\n"+
 		"List-Unsubscribe-Post: List-Unsubscribe=One-Click\r\n"+
-		"Content-Type: text/html; charset=UTF-8\r\n"+
+		"Content-Type: multipart/alternative; boundary=\"%s\"\r\n"+
 		"\r\n",
-		job.Sender.Email, job.Recipient.Email, job.Subject, job.Campaign.ID, unsubURL)
+		job.Sender.Email, job.Recipient.Email, job.Subject, messageID, 
+		time.Now().Format(time.RFC1123Z), job.Campaign.ID, unsubURL, boundary)
 
-	msg := headers + bodyFinal
+	// Build multipart body
+	multipartBody := fmt.Sprintf("--%s\r\n"+
+		"Content-Type: text/plain; charset=UTF-8\r\n"+
+		"Content-Transfer-Encoding: quoted-printable\r\n"+
+		"\r\n%s\r\n\r\n"+
+		"--%s\r\n"+
+		"Content-Type: text/html; charset=UTF-8\r\n"+
+		"Content-Transfer-Encoding: quoted-printable\r\n"+
+		"\r\n%s\r\n\r\n"+
+		"--%s--\r\n",
+		boundary, textBody, boundary, bodyWithLinks+"\n"+pixel, boundary)
+
+	msg := headers + multipartBody
 
 	if _, err = wc.Write([]byte(msg)); err != nil {
 		result.Error = "write failed: " + err.Error()
@@ -535,6 +642,36 @@ func (cs *CampaignService) sendSingleRecipient(client *smtp.Client, job recipien
 	result.Status = "sent"
 	result.SentAt = time.Now()
 	return result
+}
+
+// htmlToPlainText converts HTML to plain text for multipart emails
+func htmlToPlainText(html string) string {
+	// Remove HTML tags
+	re := regexp.MustCompile(`<[^>]+>`)
+	text := re.ReplaceAllString(html, " ")
+	
+	// Decode HTML entities
+	text = strings.ReplaceAll(text, "&nbsp;", " ")
+	text = strings.ReplaceAll(text, "&amp;", "&")
+	text = strings.ReplaceAll(text, "&lt;", "<")
+	text = strings.ReplaceAll(text, "&gt;", ">")
+	text = strings.ReplaceAll(text, "&quot;", "\"")
+	
+	// Clean up whitespace
+	re = regexp.MustCompile(`\s+`)
+	text = re.ReplaceAllString(text, " ")
+	
+	return strings.TrimSpace(text)
+}
+
+// senderDomainForMessageID extracts domain from sender address for Message-ID.
+// Kept local to this file to avoid collisions with stats helper names.
+func senderDomainForMessageID(email string) string {
+	parts := strings.Split(email, "@")
+	if len(parts) == 2 {
+		return parts[1]
+	}
+	return "localhost"
 }
 
 // ResumeInterruptedCampaigns finds campaigns stuck in "sending" and restarts them
@@ -617,6 +754,38 @@ func rewriteLinks(html string, baseURL string, recipientID uint) string {
 			baseURL, recipientID, encodedURL, signature)
 		return fmt.Sprintf("href=%s%s%s", quote, trackingURL, quote)
 	})
+}
+
+// buildBaseURL returns the appropriate base URL for tracking or unsubscribe links.
+// Priority: verified org custom domain > AppSettings.MainHostname > "http://localhost:9000"
+func buildBaseURL(st *store.Store, orgID uint, domainType string) string {
+	// 1. Try org-level custom domain config (verified only)
+	if orgID > 0 {
+		if cfg, err := st.GetOrgDomainConfig(orgID); err == nil {
+			switch domainType {
+			case "tracking":
+				if cfg.TrackingDomainVerified && cfg.TrackingDomain != "" {
+					return "https://" + cfg.TrackingDomain
+				}
+			case "unsub":
+				if cfg.UnsubscribeDomainVerified && cfg.UnsubscribeDomain != "" {
+					return "https://" + cfg.UnsubscribeDomain
+				}
+			}
+		}
+	}
+
+	// 2. Fall back to system settings
+	if settings, err := st.GetSettings(); err == nil && settings.MainHostname != "" {
+		protocol := "https"
+		if settings.MainHostname == "localhost" {
+			protocol = "http"
+		}
+		return fmt.Sprintf("%s://%s", protocol, settings.MainHostname)
+	}
+
+	// 3. Final fallback
+	return "http://localhost:9000"
 }
 
 // SendSingleEmail sends a transactional email

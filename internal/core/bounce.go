@@ -39,6 +39,9 @@ func EnsureBounceAccount(acc models.BounceAccount, plainPassword string) error {
 
 	// Set password via chpasswd only if provided
 	if plainPassword != "" {
+		if bytes.ContainsAny([]byte(plainPassword), "\r\n:") {
+			return fmt.Errorf("invalid password format")
+		}
 		chpasswd := exec.Command("chpasswd")
 		chpasswd.Stdin = bytes.NewBufferString(fmt.Sprintf("%s:%s\n", acc.Username, plainPassword))
 		if out, err := chpasswd.CombinedOutput(); err != nil {

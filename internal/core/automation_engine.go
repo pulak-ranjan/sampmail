@@ -12,6 +12,7 @@ import (
 	"github.com/pulak-ranjan/sampmail/internal/logger"
 	"github.com/pulak-ranjan/sampmail/internal/models"
 	"github.com/pulak-ranjan/sampmail/internal/store"
+	"gorm.io/gorm"
 )
 
 // =====================================
@@ -193,7 +194,7 @@ func (ae *AutomationEngine) processDelayedActions() {
 	} else {
 		// Fallback to SQL scan (slower but works without Redis)
 		if err := ae.store.DB.
-			Where("status = ? AND next_action_at <= ?", "active", time.Now()).
+			Where("status = ? AND next_action_at <= ?", "waiting", time.Now()).
 			Limit(100).
 			Find(&runs).Error; err != nil {
 			return
@@ -275,6 +276,15 @@ func (wr *WorkflowRunner) MatchesTrigger(eventType string, data map[string]inter
 func (wr *WorkflowRunner) EnterContact(contactID uint, data map[string]interface{}) {
 	log := logger.WithComponent("workflow").With("automation_id", wr.automation.ID, "contact_id", contactID)
 
+	var contact models.ContactV2
+	if err := wr.engine.store.DB.Select("id", "organization_id").First(&contact, contactID).Error; err != nil {
+		log.Error("contact not found", "error", err)
+		return
+	}
+	if contact.OrganizationID != wr.automation.OrganizationID {
+		return
+	}
+
 	// Check if contact already in workflow
 	if !wr.automation.AllowReentry {
 		var count int64
@@ -320,8 +330,9 @@ func (wr *WorkflowRunner) EnterContact(contactID uint, data map[string]interface
 	}
 
 	// Update automation stats
-	wr.engine.store.DB.Model(wr.automation).
-		UpdateColumn("total_entered", wr.automation.TotalEntered+1)
+	wr.engine.store.DB.Model(&models.AutomationV2{}).
+		Where("id = ?", wr.automation.ID).
+		UpdateColumn("total_entered", gorm.Expr("total_entered + ?", 1))
 
 	// Execute from trigger
 	wr.executeFromNode(run, triggerNodeID)
@@ -370,7 +381,9 @@ func (wr *WorkflowRunner) executeFromNode(run *models.AutomationRunV2, nodeID st
 	if err != nil {
 		if run.ErrorCount >= 3 {
 			run.Status = "failed"
-			wr.engine.store.DB.Save(run)
+			if dbErr := wr.engine.store.DB.Save(run).Error; dbErr != nil {
+				logger.WithComponent("automation").Error("failed to save failed run state", "run_id", run.ID, "error", dbErr)
+			}
 		}
 		return
 	}
@@ -383,10 +396,13 @@ func (wr *WorkflowRunner) executeFromNode(run *models.AutomationRunV2, nodeID st
 		run.Status = "completed"
 		now := time.Now()
 		run.CompletedAt = &now
-		wr.engine.store.DB.Save(run)
+		if dbErr := wr.engine.store.DB.Save(run).Error; dbErr != nil {
+			logger.WithComponent("automation").Error("failed to save completed run state", "run_id", run.ID, "error", dbErr)
+		}
 
-		wr.engine.store.DB.Model(wr.automation).
-			UpdateColumn("total_completed", wr.automation.TotalCompleted+1)
+		wr.engine.store.DB.Model(&models.AutomationV2{}).
+			Where("id = ?", wr.automation.ID).
+			UpdateColumn("total_completed", gorm.Expr("total_completed + ?", 1))
 		return
 	}
 
@@ -395,7 +411,9 @@ func (wr *WorkflowRunner) executeFromNode(run *models.AutomationRunV2, nodeID st
 		// Add to visited
 		run.NodesVisited = append(run.NodesVisited, nextNodeID)
 		run.CurrentNodeID = nextNodeID
-		wr.engine.store.DB.Save(run)
+		if dbErr := wr.engine.store.DB.Save(run).Error; dbErr != nil {
+			logger.WithComponent("automation").Error("failed to save run progress", "run_id", run.ID, "error", dbErr)
+		}
 
 		wr.executeFromNode(run, nextNodeID)
 	}
@@ -471,7 +489,7 @@ func (wr *WorkflowRunner) executeSendEmail(run *models.AutomationRunV2, config m
 
 	if templateID > 0 {
 		var template models.EmailTemplate
-		if err := wr.engine.store.DB.First(&template, templateID).Error; err == nil {
+		if err := wr.engine.store.DB.Where("id = ? AND organization_id = ?", templateID, contact.OrganizationID).First(&template).Error; err == nil {
 			subject = template.Subject
 			body = template.HTMLContent
 		}
@@ -635,7 +653,9 @@ func (wr *WorkflowRunner) executeDelay(run *models.AutomationRunV2, config model
 	// Always save to DB as source of truth
 	run.NextActionAt = &nextAction
 	run.Status = "waiting"
-	wr.engine.store.DB.Save(run)
+	if dbErr := wr.engine.store.DB.Save(run).Error; dbErr != nil {
+		logger.WithComponent("automation").Error("failed to save waiting run state", "run_id", run.ID, "error", dbErr)
+	}
 
 	return models.JSONMap{"next_action_at": nextAction, "delay_type": delayType}, nil
 }

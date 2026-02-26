@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/pulak-ranjan/sampmail/internal/models"
 	"github.com/pulak-ranjan/sampmail/internal/store"
 )
 
@@ -22,14 +23,19 @@ func NewSuppressionHandler(st *store.Store) *SuppressionHandler {
 
 // GET /api/suppressions - List suppressions with pagination
 func (h *SuppressionHandler) HandleList(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
-	
+
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
 
-	sups, total, err := h.Store.ListSuppressions(limit, offset)
+	sups, total, err := h.Store.ListSuppressions(orgID, limit, offset)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "database error"})
 		return
@@ -45,6 +51,11 @@ func (h *SuppressionHandler) HandleList(w http.ResponseWriter, r *http.Request) 
 
 // POST /api/suppressions - Add email(s) to suppression list
 func (h *SuppressionHandler) HandleAdd(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	var req struct {
 		Email  string   `json:"email"`
 		Emails []string `json:"emails"`
@@ -78,7 +89,7 @@ func (h *SuppressionHandler) HandleAdd(w http.ResponseWriter, r *http.Request) {
 		if email == "" || !strings.Contains(email, "@") {
 			continue
 		}
-		if err := h.Store.AddSuppression(email, reason, "manual"); err == nil {
+		if err := h.Store.AddSuppression(orgID, email, reason, "manual"); err == nil {
 			added++
 		}
 	}
@@ -91,13 +102,18 @@ func (h *SuppressionHandler) HandleAdd(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/suppressions/{email} - Remove from suppression list
 func (h *SuppressionHandler) HandleRemove(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	email := chi.URLParam(r, "email")
 	if email == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "email required"})
 		return
 	}
 
-	if err := h.Store.RemoveSuppression(email); err != nil {
+	if err := h.Store.RemoveSuppression(orgID, email); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to remove"})
 		return
 	}
@@ -107,6 +123,11 @@ func (h *SuppressionHandler) HandleRemove(w http.ResponseWriter, r *http.Request
 
 // POST /api/suppressions/check - Check if emails are suppressed
 func (h *SuppressionHandler) HandleCheck(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	var req struct {
 		Emails []string `json:"emails"`
 	}
@@ -116,7 +137,7 @@ func (h *SuppressionHandler) HandleCheck(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	result, err := h.Store.BulkCheckSuppressed(req.Emails)
+	result, err := h.Store.BulkCheckSuppressed(orgID, req.Emails)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "check failed"})
 		return
@@ -129,6 +150,11 @@ func (h *SuppressionHandler) HandleCheck(w http.ResponseWriter, r *http.Request)
 
 // POST /api/suppressions/import - Import suppressions from CSV
 func (h *SuppressionHandler) HandleImport(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	// Max 10MB
 	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
@@ -171,7 +197,7 @@ func (h *SuppressionHandler) HandleImport(w http.ResponseWriter, r *http.Request
 			continue
 		}
 
-		if err := h.Store.AddSuppression(email, reason, "csv_import"); err == nil {
+		if err := h.Store.AddSuppression(orgID, email, reason, "csv_import"); err == nil {
 			added++
 		} else {
 			skipped++
@@ -186,7 +212,12 @@ func (h *SuppressionHandler) HandleImport(w http.ResponseWriter, r *http.Request
 
 // GET /api/suppressions/export - Export suppressions as CSV
 func (h *SuppressionHandler) HandleExport(w http.ResponseWriter, r *http.Request) {
-	sups, _, err := h.Store.ListSuppressions(100000, 0) // Get all
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
+	sups, _, err := h.Store.ListSuppressions(orgID, 100000, 0) // Get all
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "export failed"})
 		return
@@ -212,19 +243,25 @@ func (h *SuppressionHandler) HandleExport(w http.ResponseWriter, r *http.Request
 
 // GET /api/suppressions/stats - Get suppression statistics
 func (h *SuppressionHandler) HandleStats(w http.ResponseWriter, r *http.Request) {
-	var stats struct {
-		Total       int64 `json:"total"`
-		Bounces     int64 `json:"bounces"`
-		Unsubscribes int64 `json:"unsubscribes"`
-		Complaints  int64 `json:"complaints"`
-		Manual      int64 `json:"manual"`
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
 	}
 
-	h.Store.DB.Model(&struct{}{}).Table("suppressions").Count(&stats.Total)
-	h.Store.DB.Model(&struct{}{}).Table("suppressions").Where("reason = ?", "hard_bounce").Count(&stats.Bounces)
-	h.Store.DB.Model(&struct{}{}).Table("suppressions").Where("reason = ?", "unsubscribe").Count(&stats.Unsubscribes)
-	h.Store.DB.Model(&struct{}{}).Table("suppressions").Where("reason = ?", "complaint").Count(&stats.Complaints)
-	h.Store.DB.Model(&struct{}{}).Table("suppressions").Where("reason = ?", "manual").Count(&stats.Manual)
+	var stats struct {
+		Total        int64 `json:"total"`
+		Bounces      int64 `json:"bounces"`
+		Unsubscribes int64 `json:"unsubscribes"`
+		Complaints   int64 `json:"complaints"`
+		Manual       int64 `json:"manual"`
+	}
+
+	base := h.Store.DB.Model(&models.Suppression{}).Scopes(store.WithOrgFilterScope(orgID))
+	base.Count(&stats.Total)
+	base.Where("reason = ?", "hard_bounce").Count(&stats.Bounces)
+	base.Where("reason = ?", "unsubscribe").Count(&stats.Unsubscribes)
+	base.Where("reason = ?", "complaint").Count(&stats.Complaints)
+	base.Where("reason = ?", "manual").Count(&stats.Manual)
 
 	writeJSON(w, http.StatusOK, stats)
 }

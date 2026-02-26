@@ -2,6 +2,8 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -144,17 +146,39 @@ func (s *Server) handleTestProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Test proxy connectivity
-	// TODO: Implement actual proxy test
-	// For now, just mark as checked
+	// Test proxy connectivity with a real TCP dial.
+	// This verifies that the host:port is reachable before marking it healthy.
+	addr := fmt.Sprintf("%s:%d", proxy.Host, proxy.Port)
+	start := time.Now()
+	conn, dialErr := net.DialTimeout("tcp", addr, 5*time.Second)
+	latency := time.Since(start)
+
 	proxy.LastCheck = time.Now()
+	if dialErr != nil {
+		proxy.IsHealthy = false
+		if err := s.Store.DB.Save(&proxy).Error; err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update proxy status"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success": false,
+			"message": "proxy unreachable: " + dialErr.Error(),
+			"latency": latency.String(),
+		})
+		return
+	}
+	conn.Close()
+
 	proxy.IsHealthy = true
-	s.Store.DB.Save(&proxy)
+	if err := s.Store.DB.Save(&proxy).Error; err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update proxy status"})
+		return
+	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "proxy is healthy",
-		"latency": "50ms",
+		"latency": latency.String(),
 	})
 }
 

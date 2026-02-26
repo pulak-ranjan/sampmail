@@ -41,30 +41,46 @@ export default function SubscribersPage() {
 }
 
 function SubscribersTab() {
-  const [contacts, setContacts] = useState([]);
+  const [lists, setLists] = useState([]);
+  const [selectedListId, setSelectedListId] = useState('');
+  const [subscribers, setSubscribers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState([]);
 
-  useEffect(() => { loadContacts(); }, []);
+  useEffect(() => { loadLists(); }, []);
+  useEffect(() => { loadSubscribers(); }, [selectedListId, search]);
 
-  const loadContacts = async () => {
+  const loadLists = async () => {
     try {
-      const res = await api.get('/lists');
-      let all = [];
-      for (const list of res.data || []) {
-        const c = await api.get(`/lists/${list.id}/contacts`);
-        all = [...all, ...(c.data || [])];
+      const data = await api.get('/v2/lists');
+      const nextLists = data || [];
+      setLists(nextLists);
+      if (!selectedListId && nextLists.length > 0) {
+        setSelectedListId(String(nextLists[0].id));
       }
-      setContacts(all);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   };
 
-  const filtered = contacts.filter(c =>
-    c.email?.toLowerCase().includes(search.toLowerCase()) ||
-    c.first_name?.toLowerCase().includes(search.toLowerCase())
-  );
+  const loadSubscribers = async () => {
+    if (!selectedListId) return;
+    try {
+      setLoading(true);
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+      params.append('limit', '50');
+      params.append('page', '1');
+
+      const res = await api.get(`/v2/lists/${selectedListId}/subscribers?${params}`);
+      setSubscribers(res?.data || []);
+      setSelected([]);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -79,6 +95,15 @@ function SubscribersTab() {
             className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-lg dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
           />
         </div>
+        <select
+          value={selectedListId}
+          onChange={(e) => setSelectedListId(e.target.value)}
+          className="px-4 py-2 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium dark:bg-gray-800"
+        >
+          {lists.map((l) => (
+            <option key={l.id} value={String(l.id)}>{l.name}</option>
+          ))}
+        </select>
         <button className="flex items-center gap-2 px-4 py-2 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium">
           <Upload size={18} /> Import
         </button>
@@ -91,7 +116,7 @@ function SubscribersTab() {
         <table className="w-full">
           <thead className="bg-gray-50 dark:bg-gray-700/50 border-b dark:border-gray-700">
             <tr>
-              <th className="w-10 p-4"><input type="checkbox" onChange={e => setSelected(e.target.checked ? filtered.map(c => c.id) : [])} className="rounded" /></th>
+              <th className="w-10 p-4"><input type="checkbox" onChange={e => setSelected(e.target.checked ? subscribers.map(s => s.contact_id) : [])} className="rounded" /></th>
               <th className="p-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</th>
               <th className="p-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
               <th className="p-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
@@ -100,21 +125,26 @@ function SubscribersTab() {
           </thead>
           <tbody className="divide-y dark:divide-gray-700">
             {loading ? <tr><td colSpan="5" className="p-8 text-center text-gray-500">Loading...</td></tr> :
-              filtered.length === 0 ? <tr><td colSpan="5" className="p-8 text-center text-gray-500">No subscribers found</td></tr> :
-                filtered.slice(0, 50).map(c => (
-                  <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                    <td className="p-4"><input type="checkbox" checked={selected.includes(c.id)}
-                      onChange={e => setSelected(e.target.checked ? [...selected, c.id] : selected.filter(x => x !== c.id))} className="rounded" /></td>
-                    <td className="p-3 font-medium text-gray-900 dark:text-white">{c.email}</td>
-                    <td className="p-3 text-gray-600 dark:text-gray-300">{c.first_name} {c.last_name}</td>
+              subscribers.length === 0 ? <tr><td colSpan="5" className="p-8 text-center text-gray-500">No subscribers found</td></tr> :
+                subscribers.map(s => (
+                  <tr key={`${s.list_id}:${s.contact_id}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="p-4"><input type="checkbox" checked={selected.includes(s.contact_id)}
+                      onChange={e => setSelected(e.target.checked ? [...selected, s.contact_id] : selected.filter(x => x !== s.contact_id))} className="rounded" /></td>
+                    <td className="p-3 font-medium text-gray-900 dark:text-white">{s.email}</td>
+                    <td className="p-3 text-gray-600 dark:text-gray-300">{s.first_name} {s.last_name}</td>
                     <td className="p-3">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full inline-flex items-center gap-1 ${c.is_valid
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full inline-flex items-center gap-1 ${s.status === 'active'
                         ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                        : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}>
-                        {c.is_valid && <CheckCircle className="w-3 h-3" />}
-                        {c.is_valid ? 'Valid' : 'Unverified'}</span>
+                        : s.status === 'unsubscribed'
+                          ? 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                          : s.status === 'bounced'
+                            ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                            : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'}`}>
+                        {s.status === 'active' && <CheckCircle className="w-3 h-3" />}
+                        {s.status || 'unknown'}
+                      </span>
                     </td>
-                    <td className="p-3 text-sm text-gray-500 dark:text-gray-400">{new Date(c.created_at).toLocaleDateString()}</td>
+                    <td className="p-3 text-sm text-gray-500 dark:text-gray-400">{s.subscribed_at ? new Date(s.subscribed_at).toLocaleDateString() : ''}</td>
                   </tr>
                 ))}
           </tbody>
@@ -133,21 +163,21 @@ function TagsTab() {
 
   useEffect(() => { loadTags(); }, []);
   const loadTags = async () => {
-    try { const r = await api.get('/tags'); setTags(r.data || []); }
+    try { const r = await api.get('/v2/tags'); setTags(r.data || []); }
     catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
   const save = async (t) => {
     try {
-      if (t.id) await api.put(`/tags/${t.id}`, t);
-      else await api.post('/tags', t);
+      if (t.id) await api.put(`/v2/tags/${t.id}`, t);
+      else await api.post('/v2/tags', t);
       setForm(null); loadTags();
     } catch (e) { console.error('Failed'); }
   };
 
   const del = async () => {
     if (!confirmDelete) return;
-    try { await api.delete(`/tags/${confirmDelete.id}`); loadTags(); } catch (e) { console.error('Failed'); }
+    try { await api.delete(`/v2/tags/${confirmDelete.id}`); loadTags(); } catch (e) { console.error('Failed'); }
     setConfirmDelete(null);
   };
 
@@ -232,21 +262,21 @@ function SegmentsTab() {
 
   useEffect(() => { loadSegments(); }, []);
   const loadSegments = async () => {
-    try { const r = await api.get('/segments'); setSegments(r.data || []); }
+    try { const r = await api.get('/v2/segments'); setSegments(r.data || []); }
     catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
   const save = async (s) => {
     try {
-      if (s.id) await api.put(`/segments/${s.id}`, s);
-      else await api.post('/segments', s);
+      if (s.id) await api.put(`/v2/segments/${s.id}`, s);
+      else await api.post('/v2/segments', s);
       setForm(null); loadSegments();
     } catch (e) { console.error('Failed'); }
   };
 
   const del = async () => {
     if (!confirmDelete) return;
-    try { await api.delete(`/segments/${confirmDelete.id}`); loadSegments(); } catch (e) { console.error('Failed'); }
+    try { await api.delete(`/v2/segments/${confirmDelete.id}`); loadSegments(); } catch (e) { console.error('Failed'); }
     setConfirmDelete(null);
   };
 

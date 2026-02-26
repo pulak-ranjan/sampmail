@@ -24,6 +24,10 @@ func NewUsersHandler(st *store.Store) *UsersHandler {
 
 // ListUsers returns all admin users
 func (h *UsersHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	users, err := h.Store.ListAdmins()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -53,6 +57,10 @@ func (h *UsersHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 // CreateUser creates a new admin user
 func (h *UsersHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	var req struct {
 		Email        string `json:"email"`
 		Password     string `json:"password"`
@@ -103,6 +111,11 @@ func (h *UsersHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 // UpdateUser updates an admin user
 func (h *UsersHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
+	currentUser, ok := requireSuperAdmin(w, r)
+	if !ok {
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -141,6 +154,10 @@ func (h *UsersHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.IsSuperAdmin != nil {
+		if user.ID == currentUser.ID && !*req.IsSuperAdmin {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "Cannot remove your own superadmin access"})
+			return
+		}
 		user.IsSuperAdmin = *req.IsSuperAdmin
 	}
 
@@ -158,6 +175,11 @@ func (h *UsersHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 // DeleteUser deletes an admin user
 func (h *UsersHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	currentUser, ok := requireSuperAdmin(w, r)
+	if !ok {
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -166,7 +188,6 @@ func (h *UsersHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Prevent deleting yourself
-	currentUser := r.Context().Value("user").(*models.AdminUser)
 	if currentUser.ID == uint(id) {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "Cannot delete your own account"})
 		return
@@ -182,6 +203,10 @@ func (h *UsersHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 
 // ListUserOrgs returns organizations a user belongs to
 func (h *UsersHandler) ListUserOrgs(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -200,6 +225,10 @@ func (h *UsersHandler) ListUserOrgs(w http.ResponseWriter, r *http.Request) {
 
 // AssignUserToOrg assigns a user to an organization
 func (h *UsersHandler) AssignUserToOrg(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -249,6 +278,10 @@ func (h *UsersHandler) AssignUserToOrg(w http.ResponseWriter, r *http.Request) {
 
 // RemoveUserFromOrg removes a user from an organization
 func (h *UsersHandler) RemoveUserFromOrg(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -269,4 +302,17 @@ func (h *UsersHandler) RemoveUserFromOrg(w http.ResponseWriter, r *http.Request)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "User removed from organization"})
+}
+
+func requireSuperAdmin(w http.ResponseWriter, r *http.Request) (*models.AdminUser, bool) {
+	admin := getAdminFromContext(r.Context())
+	if admin == nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "not authenticated"})
+		return nil, false
+	}
+	if !admin.IsSuperAdmin {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "superadmin access required"})
+		return nil, false
+	}
+	return admin, true
 }

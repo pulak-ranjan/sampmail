@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import api from '../api';
 
 const SegmentsPage = () => {
     const [segments, setSegments] = useState([]);
@@ -11,10 +12,7 @@ const SegmentsPage = () => {
 
     const fetchSegments = async () => {
         try {
-            const res = await fetch('/api/segments', {
-                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
-            });
-            const data = await res.json();
+            const data = await api.get('/v2/segments');
             setSegments(data || []);
         } catch (error) {
             console.error('Failed to fetch segments:', error);
@@ -25,14 +23,7 @@ const SegmentsPage = () => {
 
     const createSegment = async (data) => {
         try {
-            await fetch('/api/segments', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('sampmail_token')}`,
-                },
-                body: JSON.stringify(data),
-            });
+            await api.post('/v2/segments', data);
             setShowCreate(false);
             fetchSegments();
         } catch (error) {
@@ -43,10 +34,7 @@ const SegmentsPage = () => {
     const deleteSegment = async (id) => {
         if (!confirm('Delete this segment?')) return;
         try {
-            await fetch(`/api/segments/${id}`, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
-            });
+            await api.delete(`/v2/segments/${id}`);
             fetchSegments();
         } catch (error) {
             console.error('Failed to delete segment:', error);
@@ -55,10 +43,7 @@ const SegmentsPage = () => {
 
     const refreshSegment = async (id) => {
         try {
-            await fetch(`/api/segments/${id}/refresh`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
-            });
+            await api.post(`/v2/segments/${id}/refresh`, {});
             fetchSegments();
         } catch (error) {
             console.error('Failed to refresh segment:', error);

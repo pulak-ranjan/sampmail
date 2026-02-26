@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Ban, Plus, Search, Trash2, AlertTriangle, UserX } from 'lucide-react';
+import api from '../api';
 
 const SuppressionsPage = () => {
     const [suppressions, setSuppressions] = useState([]);
@@ -17,10 +18,7 @@ const SuppressionsPage = () => {
             const params = new URLSearchParams({ page: pagination.page, limit: 50 });
             if (search) params.append('search', search);
 
-            const res = await fetch(`/api/suppressions?${params}`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
-            });
-            const data = await res.json();
+            const data = await api.get(`/v2/suppressions?${params.toString()}`);
             setSuppressions(data.data || []);
             setPagination({ page: data.page || 1, total: data.total || 0, totalPages: data.totalPages || 0 });
         } catch (error) {
@@ -32,14 +30,7 @@ const SuppressionsPage = () => {
 
     const addSuppression = async (email, reason) => {
         try {
-            await fetch('/api/suppressions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('sampmail_token')}`,
-                },
-                body: JSON.stringify({ email, reason }),
-            });
+            await api.post('/v2/suppressions', { email, reason });
             setShowAdd(false);
             fetchSuppressions();
         } catch (error) {
@@ -50,10 +41,7 @@ const SuppressionsPage = () => {
     const removeSuppression = async (id) => {
         if (!confirm('Remove this email from suppression list?')) return;
         try {
-            await fetch(`/api/suppressions/${id}`, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
-            });
+            await api.delete(`/v2/suppressions/${id}`);
             fetchSuppressions();
         } catch (error) {
             console.error('Failed to remove suppression:', error);

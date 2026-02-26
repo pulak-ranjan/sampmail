@@ -174,11 +174,31 @@ var (
 	RedisAuthLimiter    *RedisRateLimiter
 	RedisGeneralLimiter *RedisRateLimiter
 	RedisVerifyLimiter  *RedisRateLimiter
+	globalRedisClient   *redis.Client
 )
 
 // InitRedisRateLimiters initializes Redis-based rate limiters
 func InitRedisRateLimiters(cfg *RedisConfig) error {
 	var err error
+
+	// Create global Redis client
+	globalRedisClient = redis.NewClient(&redis.Options{
+		Addr:         cfg.Addr,
+		Password:     cfg.Password,
+		DB:           cfg.DB,
+		PoolSize:     cfg.PoolSize,
+		MinIdleConns: cfg.MinIdleConns,
+		DialTimeout:  cfg.DialTimeout,
+		ReadTimeout:  cfg.ReadTimeout,
+		WriteTimeout: cfg.WriteTimeout,
+	})
+
+	// Verify connection
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err = globalRedisClient.Ping(ctx).Err(); err != nil {
+		return err
+	}
 
 	RedisAuthLimiter, err = NewRedisRateLimiter(cfg, "ratelimit:auth", 5, time.Minute)
 	if err != nil {
@@ -196,6 +216,11 @@ func InitRedisRateLimiters(cfg *RedisConfig) error {
 	}
 
 	return nil
+}
+
+// GetRedisClient returns the global Redis client for use by other components
+func GetRedisClient() *redis.Client {
+	return globalRedisClient
 }
 
 // GetRateLimiter returns either Redis or in-memory rate limiter based on availability

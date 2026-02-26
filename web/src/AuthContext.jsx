@@ -22,18 +22,25 @@ export function AuthProvider({ children }) {
     }
     (async () => {
       try {
-        const u = await apiMe(); // Note: apiMe might need update to return orgs if session persists? 
-        // Actually, apiMe usually returns minimal user info. 
-        // We might need to fetch orgs separately or update apiMe. 
-        // For now, let's assume we load orgs from localStorage or fetch them.
-        // Ideally, apiMe should return "organizations" too.
+        const u = await apiMe();
         setUser(u);
+        setOrganizations(u.organizations || []);
 
-        // Load stored org ID
         const storedOrgId = localStorage.getItem("sampmail_org_id");
-        if (storedOrgId && u.organizations) {
-          const org = u.organizations.find(o => o.id === parseInt(storedOrgId));
-          if (org) setCurrentOrganization(org);
+        const orgs = u.organizations || [];
+
+        if (orgs.length > 0) {
+          let org = null;
+          if (storedOrgId) {
+            org = orgs.find(o => o.id === parseInt(storedOrgId));
+          }
+          if (!org) {
+            org = orgs[0];
+          }
+          selectOrganization(org);
+        } else {
+          localStorage.removeItem("sampmail_org_id");
+          setCurrentOrganization(null);
         }
       } catch {
         localStorage.removeItem("sampmail_token");

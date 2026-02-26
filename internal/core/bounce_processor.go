@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/pulak-ranjan/sampmail/internal/models"
 	"github.com/pulak-ranjan/sampmail/internal/store"
 )
@@ -555,6 +557,13 @@ func (bp *BounceProcessor) recordBounce(info *BounceInfo) error {
 		return fmt.Errorf("invalid email")
 	}
 
+	// =====================================
+	// ENHANCED BOUNCE CLASSIFICATION
+	// =====================================
+	// Classify bounce more precisely based on codes
+	classification := bp.classifyBounce(info)
+	info.BounceType = classification.Type
+
 	// Create bounce event record
 	event := &models.BounceEvent{
 		Email:          email,
@@ -569,18 +578,229 @@ func (bp *BounceProcessor) recordBounce(info *BounceInfo) error {
 		return err
 	}
 
-	// For hard bounces, add to suppression list immediately
-	if info.BounceType == "hard" {
-		source := "bounce"
+	// =====================================
+	// BOUNCE ACTIONS BY CLASSIFICATION
+	// =====================================
+	switch classification.Action {
+	case "suppress":
+		// Hard bounce - add to suppression immediately
+		source := "bounce:" + classification.Reason
 		if info.CampaignID > 0 {
-			source = fmt.Sprintf("campaign:%d", info.CampaignID)
+			source = fmt.Sprintf("campaign:%d:%s", info.CampaignID, classification.Reason)
 		}
-		return bp.Store.AddSuppression(email, "hard_bounce", source)
+		// orgID=0: system-level suppression applies across all orgs
+		bp.Store.AddSuppression(0, email, classification.Reason, source)
+
+		// Update contact status
+		bp.Store.DB.Model(&models.ContactV2{}).
+			Where("email = ?", email).
+			Update("status", "bounced")
+
+		log.Printf("[BounceProcessor] Hard bounce suppressed: %s (reason: %s)", email, classification.Reason)
+
+	case "retry":
+		// Soft bounce - schedule for retry if job queue available
+		log.Printf("[BounceProcessor] Soft bounce recorded: %s (code: %s) - eligible for retry", email, info.BounceCode)
+		// Note: Retry scheduling is handled by the retry policy in the campaign service
+		// Here we just record it; the job queue will handle retries
+
+	case "suppress_threshold":
+		// Soft bounce threshold exceeded
+		bp.Store.AddSuppression(0, email, "soft_bounce_threshold", "auto")
+		log.Printf("[BounceProcessor] Soft bounce threshold exceeded: %s", email)
+
+	case "complaint":
+		// Spam complaint - suppress and alert
+		bp.Store.AddSuppression(0, email, "complaint", "fbl")
+		bp.Store.DB.Model(&models.ContactV2{}).
+			Where("email = ?", email).
+			Update("status", "complained")
+		log.Printf("[BounceProcessor] Complaint processed: %s", email)
+		
+		// Update sender reputation
+		if info.CampaignID > 0 {
+			bp.decrementSenderReputation(info.CampaignID, 15)
+		}
+		
+	case "alert":
+		// Technical issue - alert but don't suppress
+		log.Printf("[BounceProcessor] ALERT: Technical bounce for %s - %s: %s", 
+			email, classification.Reason, info.DiagnosticMessage)
 	}
 
-	// For soft bounces, check threshold
-	bounces, err := bp.Store.GetBouncesByEmail(email)
-	if err == nil {
+	// Update campaign bounce stats
+	if info.CampaignID > 0 {
+		bp.updateCampaignBounceStats(info.CampaignID, info.BounceType)
+	}
+
+	return nil
+}
+
+// BounceClassification represents the result of bounce classification
+type BounceClassification struct {
+	Type     string // "hard", "soft", "complaint", "technical"
+	Action   string // "suppress", "retry", "suppress_threshold", "complaint", "alert"
+	Reason   string // Human-readable reason
+	Retryable bool  // Whether this bounce is eligible for retry
+}
+
+// classifyBounce determines the precise classification of a bounce
+func (bp *BounceProcessor) classifyBounce(info *BounceInfo) BounceClassification {
+	class := BounceClassification{
+		Type:      info.BounceType,
+		Action:    "retry",
+		Retryable: false,
+	}
+	
+	// Check for specific bounce codes
+	code := info.BounceCode
+	
+	// Hard bounce codes - permanent failures
+	hardBounceReasons := map[string]string{
+		"5.1.1": "mailbox_does_not_exist",
+		"5.1.2": "domain_does_not_exist",
+		"5.1.3": "invalid_mailbox_syntax",
+		"5.1.4": "mailbox_ambiguous",
+		"5.1.6": "mailbox_moved",
+		"5.2.1": "mailbox_disabled",
+		"5.2.2": "mailbox_full_permanent",
+		"5.2.3": "message_too_long",
+		"5.4.1": "no_answer_from_host",
+		"5.4.4": "unable_to_route",
+		"5.7.1": "delivery_not_authorized",
+		"5.7.26": "dkim_spf_failure",
+	}
+	
+	if reason, isHard := hardBounceReasons[code]; isHard {
+		class.Type = "hard"
+		class.Action = "suppress"
+		class.Reason = reason
+		class.Retryable = false
+		return class
+	}
+	
+	// Check SMTP codes
+	smtpCode := extractSMTPCodeFromBounce(info.DiagnosticMessage)
+	
+	switch {
+	case strings.HasPrefix(smtpCode, "550"):
+		class.Type = "hard"
+		class.Action = "suppress"
+		class.Reason = "mailbox_unavailable"
+		
+	case strings.HasPrefix(smtpCode, "551"):
+		class.Type = "hard"
+		class.Action = "suppress"
+		class.Reason = "user_not_local"
+		
+	case strings.HasPrefix(smtpCode, "552") && strings.Contains(strings.ToLower(info.DiagnosticMessage), "full"):
+		// Mailbox full - this is actually a soft bounce
+		class.Type = "soft"
+		class.Action = "retry"
+		class.Reason = "mailbox_full"
+		class.Retryable = true
+		
+	case strings.HasPrefix(smtpCode, "553"):
+		class.Type = "hard"
+		class.Action = "suppress"
+		class.Reason = "invalid_mailbox_name"
+		
+	case strings.HasPrefix(smtpCode, "554"):
+		class.Type = "hard"
+		class.Action = "suppress"
+		class.Reason = "transaction_failed"
+		
+	// Soft bounce codes - temporary failures
+	case strings.HasPrefix(smtpCode, "421"):
+		class.Type = "soft"
+		class.Action = "retry"
+		class.Reason = "service_unavailable"
+		class.Retryable = true
+		
+	case strings.HasPrefix(smtpCode, "450"):
+		class.Type = "soft"
+		class.Action = "retry"
+		class.Reason = "mailbox_busy"
+		class.Retryable = true
+		
+	case strings.HasPrefix(smtpCode, "451"):
+		class.Type = "soft"
+		class.Action = "retry"
+		class.Reason = "local_error"
+		class.Retryable = true
+		
+	case strings.HasPrefix(smtpCode, "452"):
+		class.Type = "soft"
+		class.Action = "retry"
+		class.Reason = "insufficient_storage"
+		class.Retryable = true
+		
+	case strings.HasPrefix(smtpCode, "4"):
+		class.Type = "soft"
+		class.Action = "retry"
+		class.Reason = "temporary_failure"
+		class.Retryable = true
+	}
+	
+	// Check diagnostic message for patterns
+	diagLower := strings.ToLower(info.DiagnosticMessage)
+	
+	// Hard bounce patterns
+	hardPatterns := []string{
+		"user unknown",
+		"mailbox not found",
+		"no such user",
+		"recipient rejected",
+		"address rejected",
+		"does not exist",
+		"invalid recipient",
+		"permanent failure",
+		"mailbox unavailable",
+	}
+	
+	for _, pattern := range hardPatterns {
+		if strings.Contains(diagLower, pattern) {
+			class.Type = "hard"
+			class.Action = "suppress"
+			class.Reason = "permanent_failure"
+			class.Retryable = false
+			return class
+		}
+	}
+	
+	// Soft bounce patterns
+	softPatterns := []string{
+		"try again later",
+		"temporarily unavailable",
+		"greylist",
+		"graylist",
+		"rate limit",
+		"throttl",
+		"try again",
+		"come back later",
+	}
+	
+	for _, pattern := range softPatterns {
+		if strings.Contains(diagLower, pattern) {
+			class.Type = "soft"
+			class.Action = "retry"
+			class.Reason = "temporary_failure"
+			class.Retryable = true
+			return class
+		}
+	}
+	
+	// Check for complaint type
+	if info.BounceType == "complaint" {
+		class.Type = "complaint"
+		class.Action = "complaint"
+		class.Reason = "spam_complaint"
+		return class
+	}
+	
+	// Check soft bounce threshold
+	if info.BounceType == "soft" {
+		bounces, _ := bp.Store.GetBouncesByEmail(info.OriginalRecipient)
 		softCount := 0
 		for _, b := range bounces {
 			if b.BounceType == "soft" {
@@ -588,11 +808,51 @@ func (bp *BounceProcessor) recordBounce(info *BounceInfo) error {
 			}
 		}
 		if softCount >= 3 {
-			return bp.Store.AddSuppression(email, "soft_bounce_threshold", "auto")
+			class.Action = "suppress_threshold"
+			class.Reason = "soft_bounce_threshold_exceeded"
 		}
 	}
+	
+	return class
+}
 
-	return nil
+// extractSMTPCodeFromBounce extracts SMTP code from diagnostic message
+func extractSMTPCodeFromBounce(diag string) string {
+	re := regexp.MustCompile(`(\d{3})`)
+	matches := re.FindStringSubmatch(diag)
+	if len(matches) > 1 {
+		return matches[1]
+	}
+	return ""
+}
+
+// updateCampaignBounceStats updates campaign bounce statistics
+func (bp *BounceProcessor) updateCampaignBounceStats(campaignID uint, bounceType string) {
+	// Use a strict whitelist to prevent SQL injection — never interpolate
+	// user-controlled strings directly into column names or raw SQL.
+	var column string
+	if bounceType == "soft" {
+		column = "total_soft_bounced"
+	} else {
+		column = "total_bounced"
+	}
+
+	bp.Store.DB.Model(&models.Campaign{}).
+		Where("id = ?", campaignID).
+		UpdateColumn(column, gorm.Expr(column+" + 1"))
+}
+
+// decrementSenderReputation decreases sender reputation score
+func (bp *BounceProcessor) decrementSenderReputation(campaignID uint, points int) {
+	var campaign models.Campaign
+	if err := bp.Store.DB.First(&campaign, campaignID).Error; err != nil {
+		return
+	}
+	
+	bp.Store.DB.Model(&models.Sender{}).
+		Where("id = ?", campaign.SenderID).
+		UpdateColumn("reputation_score", 
+			bp.Store.DB.Raw("GREATEST(0, reputation_score - ?)", points))
 }
 
 // ProcessComplaint handles FBL (Feedback Loop) complaints
@@ -621,7 +881,8 @@ func (bp *BounceProcessor) ProcessComplaint(email string, campaignID uint) error
 	if campaignID > 0 {
 		source = fmt.Sprintf("fbl:campaign:%d", campaignID)
 	}
-	return bp.Store.AddSuppression(email, "complaint", source)
+	// orgID=0: system-level suppression applies across all orgs
+	return bp.Store.AddSuppression(0, email, "complaint", source)
 }
 
 // GetBounceStats returns bounce statistics

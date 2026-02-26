@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/pulak-ranjan/sampmail/internal/core"
+	"github.com/pulak-ranjan/sampmail/internal/logger"
 	"github.com/pulak-ranjan/sampmail/internal/models"
 	"github.com/pulak-ranjan/sampmail/internal/store"
 )
@@ -165,7 +166,8 @@ func (h *ContactHandler) HandleCleanList(w http.ResponseWriter, r *http.Request)
 
 	opts := h.buildVerifierOpts()
 
-	// Run cleaning in background
+	// Run cleaning in background — sequential processing prevents concurrent
+	// writes to the same contact row and avoids overwhelming SMTP servers.
 	go func() {
 		for _, c := range contacts {
 			res := core.VerifyEmail(c.Email, opts)
@@ -174,7 +176,10 @@ func (h *ContactHandler) HandleCleanList(w http.ResponseWriter, r *http.Request)
 			c.RiskScore = res.RiskScore
 			c.VerifyLog = res.Log
 
-			h.Store.DB.Save(&c)
+			if err := h.Store.DB.Save(&c).Error; err != nil {
+				// Log but continue — one failure shouldn't abort the whole list clean
+				logger.WithComponent("contacts").Error("failed to save contact verification", "id", c.ID, "error", err)
+			}
 
 			// Throttle to avoid overwhelming Reacher/SMTP servers
 			time.Sleep(200 * time.Millisecond)

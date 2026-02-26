@@ -520,6 +520,74 @@ type WebhookV2 struct {
 }
 
 // =====================================
+// TAGS, SEGMENTS, SUPPRESSIONS (V2)
+// =====================================
+
+type TagV2 struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	OrganizationID uint      `gorm:"index;uniqueIndex:idx_tagv2_org_name" json:"organization_id"`
+	Name           string    `gorm:"uniqueIndex:idx_tagv2_org_name" json:"name"`
+	Color          string    `json:"color"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+type ContactTagV2 struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	ContactID uint      `gorm:"index;uniqueIndex:idx_contacttagv2_contact_tag" json:"contact_id"`
+	TagID     uint      `gorm:"index;uniqueIndex:idx_contacttagv2_contact_tag" json:"tag_id"`
+	AddedAt   time.Time `json:"added_at"`
+}
+
+type SegmentV2 struct {
+	ID             uint `gorm:"primaryKey" json:"id"`
+	OrganizationID uint `gorm:"index;uniqueIndex:idx_segmentv2_org_name" json:"organization_id"`
+
+	Name        string `gorm:"uniqueIndex:idx_segmentv2_org_name" json:"name"`
+	Description string `json:"description"`
+	Conditions  string `json:"conditions" gorm:"type:text"`
+
+	IsDynamic    bool      `json:"is_dynamic"`
+	CachedCount  int       `json:"subscriber_count"`
+	LastComputed time.Time `json:"last_refreshed"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+type SuppressionV2 struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	OrganizationID uint      `gorm:"index;uniqueIndex:idx_suppressionv2_org_email" json:"organization_id"`
+	Email          string    `gorm:"index;uniqueIndex:idx_suppressionv2_org_email" json:"email"`
+	Reason         string    `json:"reason"`
+	Source         string    `json:"source"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+// =====================================
+// PER-TENANT CUSTOM DOMAIN CONFIG
+// =====================================
+
+// OrganizationDomainConfig stores per-tenant tracking and unsubscribe domain settings.
+// Tenants set a tracking domain (e.g. track.theirdomain.com) and an unsubscribe domain
+// (e.g. unsub.theirdomain.com) by pointing a CNAME to the system's hostname.
+type OrganizationDomainConfig struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	OrganizationID uint      `gorm:"uniqueIndex" json:"organization_id"` // one config per org
+
+	// Tracking domain (for open/click tracking links)
+	TrackingDomain         string `json:"tracking_domain"`          // e.g. "track.theirdomain.com"
+	TrackingDomainVerified bool   `json:"tracking_domain_verified"` // true after CNAME verified
+	TrackingCNAMETarget    string `json:"tracking_cname_target"`    // what to point CNAME at
+
+	// Unsubscribe domain (for unsubscribe links)
+	UnsubscribeDomain         string `json:"unsubscribe_domain"`          // e.g. "unsub.theirdomain.com"
+	UnsubscribeDomainVerified bool   `json:"unsubscribe_domain_verified"` // true after CNAME verified
+	UnsubCNAMETarget          string `json:"unsub_cname_target"`          // what to point CNAME at
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// =====================================
 // HELPER TYPES
 // =====================================
 

@@ -16,6 +16,7 @@ import {
     MousePointer
 } from "lucide-react";
 import { cn } from "../lib/utils";
+import { getCampaignStats, apiRequest } from "../api";
 
 export default function UserDashboard() {
     const [stats, setStats] = useState(null);
@@ -27,52 +28,17 @@ export default function UserDashboard() {
     }, []);
 
     const loadDashboardData = async () => {
+        const orgId = localStorage.getItem('sampmail_org_id');
+        if (!orgId) {
+            setLoading(false);
+            return;
+        }
+
         try {
-            const token = localStorage.getItem('sampmail_token');
-            const orgId = localStorage.getItem('sampmail_org_id');
-
-            if (!orgId) {
-                setLoading(false);
-                return;
-            }
-
-            // Fetch campaign stats
-            const statsRes = await fetch('/api/v2/campaigns/stats', {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'X-Organization-ID': orgId
-                }
-            });
-
-            if (statsRes.ok) {
-                const data = await statsRes.json();
-                setStats(data);
-            } else {
-                // Default stats if API fails
-                setStats({
-                    total_campaigns: 0,
-                    total_sent: 0,
-                    total_opens: 0,
-                    total_clicks: 0,
-                    open_rate: 0,
-                    click_rate: 0
-                });
-            }
-
-            // Fetch recent activity
-            const activityRes = await fetch('/api/v2/activity?limit=5', {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'X-Organization-ID': orgId
-                }
-            });
-
-            if (activityRes.ok) {
-                const data = await activityRes.json();
-                setRecentActivity(Array.isArray(data) ? data : []);
-            }
+            const data = await getCampaignStats();
+            setStats(data);
         } catch (err) {
-            console.error('Failed to load dashboard:', err);
+            console.error('Failed to load campaign stats:', err);
             setStats({
                 total_campaigns: 0,
                 total_sent: 0,
@@ -81,9 +47,20 @@ export default function UserDashboard() {
                 open_rate: 0,
                 click_rate: 0
             });
-        } finally {
-            setLoading(false);
         }
+
+        try {
+            const data = await apiRequest('/v2/campaigns');
+            const items = Array.isArray(data) ? data.slice(0, 5).map((c) => ({
+                description: `Campaign "${c.name}" is ${c.status || 'draft'}`,
+                time: c.created_at ? new Date(c.created_at).toLocaleString() : 'recently'
+            })) : [];
+            setRecentActivity(items);
+        } catch (err) {
+            console.error('Failed to load recent campaigns:', err);
+        }
+
+        setLoading(false);
     };
 
     const orgId = localStorage.getItem('sampmail_org_id');

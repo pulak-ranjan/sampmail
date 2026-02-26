@@ -34,7 +34,7 @@ const ListsPage = () => {
   const fetchLists = async () => {
     try {
       const res = await fetch('/api/v2/lists', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
+        headers: getAuthHeaders(),
       });
       const data = await res.json();
       setLists(Array.isArray(data) ? data : []);
@@ -57,7 +57,7 @@ const ListsPage = () => {
       });
 
       const res = await fetch(`/api/v2/lists/${selectedList.id}/subscribers?${params}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
+        headers: getAuthHeaders(),
       });
       const data = await res.json();
       setSubscribers(data.data || []);
@@ -75,10 +75,7 @@ const ListsPage = () => {
     try {
       const res = await fetch('/api/v2/lists', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('sampmail_token')}`,
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify(listData),
       });
       const data = await res.json();
@@ -96,7 +93,7 @@ const ListsPage = () => {
     try {
       await fetch(`/api/v2/lists/${listId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
+        headers: getAuthHeaders(),
       });
       setLists(lists.filter(l => l.id !== listId));
       if (selectedList?.id === listId) {
@@ -112,10 +109,7 @@ const ListsPage = () => {
     try {
       await fetch(`/api/v2/lists/${selectedList.id}/subscribers`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('sampmail_token')}`,
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify(subscriberData),
       });
       setShowAddModal(false);
@@ -133,7 +127,7 @@ const ListsPage = () => {
     try {
       await fetch(`/api/v2/lists/${selectedList.id}/subscribers/${contactId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
+        headers: getAuthHeaders(),
       });
       fetchSubscribers();
       fetchLists();
@@ -147,7 +141,7 @@ const ListsPage = () => {
     try {
       await fetch(`/api/v2/lists/${selectedList.id}/subscribers/${contactId}/unsubscribe`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
+        headers: getAuthHeaders(),
       });
       fetchSubscribers();
       fetchLists();
@@ -638,7 +632,12 @@ const ImportModal = ({ listId, onClose, onComplete }) => {
 
       const res = await fetch(`/api/v2/lists/${listId}/import`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
+        headers: (() => {
+          const auth = getAuthHeaders();
+          const h = { Authorization: auth.Authorization };
+          if (auth["X-Organization-ID"]) h["X-Organization-ID"] = auth["X-Organization-ID"];
+          return h;
+        })(),
         body: formData,
       });
       const data = await res.json();

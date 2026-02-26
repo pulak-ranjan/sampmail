@@ -17,10 +17,17 @@ const UpdateManager = () => {
     channel: 'lts'
   });
 
+  const authHeaders = () => {
+    const token = localStorage.getItem('sampmail_token');
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    return headers;
+  };
+
   // Fetch update status
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch('/api/system/updates');
+      const res = await fetch('/api/updates/status', { headers: authHeaders() });
       if (res.ok) {
         const data = await res.json();
         setStatus(data);
@@ -39,7 +46,7 @@ const UpdateManager = () => {
     setChecking(true);
     setError(null);
     try {
-      const res = await fetch('/api/system/updates/check', { method: 'POST' });
+      const res = await fetch('/api/updates/check', { method: 'POST', headers: authHeaders() });
       if (res.ok) {
         const data = await res.json();
         setStatus(data);
@@ -65,32 +72,11 @@ const UpdateManager = () => {
     setError(null);
 
     try {
-      const res = await fetch('/api/system/updates/install', { method: 'POST' });
+      const res = await fetch('/api/updates/apply', { method: 'POST', headers: authHeaders() });
       if (res.ok) {
-        // Poll for progress
-        const pollProgress = setInterval(async () => {
-          try {
-            const progressRes = await fetch('/api/system/updates/progress');
-            if (progressRes.ok) {
-              const data = await progressRes.json();
-              setProgress(data.progress);
-              if (data.error) {
-                setError(data.error);
-                setInstalling(false);
-                clearInterval(pollProgress);
-              }
-              if (data.progress >= 100) {
-                clearInterval(pollProgress);
-                // Application will restart, show message
-                setProgress(100);
-              }
-            }
-          } catch {
-            // Connection lost - probably restarting
-            clearInterval(pollProgress);
-            setProgress(100);
-          }
-        }, 1000);
+        setProgress(100);
+        setInstalling(false);
+        fetchStatus();
       } else {
         const err = await res.json();
         setError(err.error || 'Failed to start update');
@@ -105,15 +91,8 @@ const UpdateManager = () => {
   // Save settings
   const saveSettings = async () => {
     try {
-      const res = await fetch('/api/system/updates/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings)
-      });
-      if (res.ok) {
-        setShowSettings(false);
-        fetchStatus();
-      }
+      // Settings endpoint is not available in backend yet.
+      setShowSettings(false);
     } catch (err) {
       setError('Failed to save settings');
     }

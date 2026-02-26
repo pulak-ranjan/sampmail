@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Tag } from 'lucide-react';
+import api from '../api';
 
 const TagsPage = () => {
     const [tags, setTags] = useState([]);
@@ -13,10 +14,7 @@ const TagsPage = () => {
 
     const fetchTags = async () => {
         try {
-            const res = await fetch('/api/tags', {
-                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
-            });
-            const data = await res.json();
+            const data = await api.get('/v2/tags');
             setTags(data || []);
         } catch (error) {
             console.error('Failed to fetch tags:', error);
@@ -27,14 +25,7 @@ const TagsPage = () => {
 
     const createTag = async (data) => {
         try {
-            await fetch('/api/tags', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('sampmail_token')}`,
-                },
-                body: JSON.stringify(data),
-            });
+            await api.post('/v2/tags', data);
             setShowCreate(false);
             fetchTags();
         } catch (error) {
@@ -44,14 +35,7 @@ const TagsPage = () => {
 
     const updateTag = async (id, data) => {
         try {
-            await fetch(`/api/tags/${id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('sampmail_token')}`,
-                },
-                body: JSON.stringify(data),
-            });
+            await api.put(`/v2/tags/${id}`, data);
             setEditTag(null);
             fetchTags();
         } catch (error) {
@@ -62,10 +46,7 @@ const TagsPage = () => {
     const deleteTag = async (id) => {
         if (!confirm('Delete this tag?')) return;
         try {
-            await fetch(`/api/tags/${id}`, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${localStorage.getItem('sampmail_token')}` },
-            });
+            await api.delete(`/v2/tags/${id}`);
             fetchTags();
         } catch (error) {
             console.error('Failed to delete tag:', error);
