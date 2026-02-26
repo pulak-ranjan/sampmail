@@ -13,6 +13,7 @@ import (
 
 	"github.com/pulak-ranjan/sampmail/internal/config"
 	"github.com/pulak-ranjan/sampmail/internal/core"
+	"github.com/pulak-ranjan/sampmail/internal/logger"
 	"github.com/pulak-ranjan/sampmail/internal/middleware/custom"
 	"github.com/pulak-ranjan/sampmail/internal/store"
 )
@@ -25,6 +26,21 @@ type Server struct {
 
 func NewServer(st *store.Store, ws *core.WebhookService) *Server {
 	s := &Server{Store: st, WS: ws}
+
+	// Wire up WebSocket origin validator using app settings
+	wsAllowedOrigins = func(origin string) bool {
+		settings, err := st.GetSettings()
+		if err != nil || settings.AllowedOrigins == "" {
+			return false
+		}
+		for _, a := range strings.Split(settings.AllowedOrigins, ",") {
+			if strings.TrimSpace(a) == origin {
+				return true
+			}
+		}
+		return false
+	}
+
 	s.Router = s.routes()
 	return s
 }
@@ -93,12 +109,23 @@ func (s *Server) routes() chi.Router {
 	r.Group(func(r chi.Router) {
 		r.Use(s.authMiddleware)
 
+		// WebSocket (real-time updates)
+		r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
+			admin := getAdminFromContext(r.Context())
+			org := getOrganizationFromContext(r.Context())
+			var orgID uint
+			if org != nil {
+				orgID = org.ID
+			}
+			HandleWebSocket(w, r, admin.ID, orgID)
+		})
+
 		// Auth & Profile
 		r.Get("/api/auth/me", s.handleMe)
 		r.Post("/api/auth/logout", s.handleLogout)
-		r.Post("/api/auth/setup-2fa", s.handleSetup2FA)
-		r.Post("/api/auth/enable-2fa", s.handleEnable2FA)
-		r.Post("/api/auth/disable-2fa", s.handleDisable2FA)
+		r.With(custom.AuthLimiter.Limit).Post("/api/auth/setup-2fa", s.handleSetup2FA)
+		r.With(custom.AuthLimiter.Limit).Post("/api/auth/enable-2fa", s.handleEnable2FA)
+		r.With(custom.AuthLimiter.Limit).Post("/api/auth/disable-2fa", s.handleDisable2FA)
 		r.Post("/api/auth/theme", s.handleSetTheme)
 		r.Get("/api/auth/sessions", s.handleListSessions)
 
@@ -385,9 +412,11 @@ func (s *Server) routes() chi.Router {
 			// Campaigns V2 - Enhanced with personalization
 			campaignV2 := NewCampaignHandlerV2(s.Store)
 			r.Get("/api/v2/campaigns", campaignV2.ListCampaigns)
+			r.Get("/api/v2/campaigns/stats", campaignV2.GetCampaignStats)
 			r.Post("/api/v2/campaigns", campaignV2.CreateCampaign)
 			r.Get("/api/v2/campaigns/{id}", campaignV2.GetCampaign)
 			r.Put("/api/v2/campaigns/{id}", campaignV2.UpdateCampaign)
+			r.Delete("/api/v2/campaigns/{id}", campaignV2.DeleteCampaign)
 			r.Post("/api/v2/campaigns/{id}/preview", campaignV2.PreviewCampaign)
 
 			// Subscriber Lists
@@ -405,6 +434,41 @@ func (s *Server) routes() chi.Router {
 			r.Get("/api/v2/lists/{id}/export", listHandler.ExportSubscribers)
 			r.Post("/api/v2/lists/{id}/copy", listHandler.CopySubscribers)
 			r.Get("/api/v2/lists/{id}/stats", listHandler.GetListStats)
+
+			keyV2 := NewAPIKeyHandlerV2(s.Store)
+			r.Get("/api/v2/keys", keyV2.ListKeys)
+			r.Post("/api/v2/keys", keyV2.CreateKey)
+			r.Delete("/api/v2/keys/{id}", keyV2.DeleteKey)
+
+			tagV2 := NewTagHandlerV2(s.Store)
+			r.Get("/api/v2/tags", tagV2.List)
+			r.Post("/api/v2/tags", tagV2.Create)
+			r.Put("/api/v2/tags/{id}", tagV2.Update)
+			r.Delete("/api/v2/tags/{id}", tagV2.Delete)
+
+			segmentV2 := NewSegmentHandlerV2(s.Store)
+			r.Get("/api/v2/segments", segmentV2.List)
+			r.Post("/api/v2/segments", segmentV2.Create)
+			r.Delete("/api/v2/segments/{id}", segmentV2.Delete)
+			r.Post("/api/v2/segments/{id}/refresh", segmentV2.Refresh)
+
+			suppV2 := NewSuppressionHandlerV2(s.Store)
+			r.Get("/api/v2/suppressions", suppV2.List)
+			r.Post("/api/v2/suppressions", suppV2.Add)
+			r.Delete("/api/v2/suppressions/{id}", suppV2.Delete)
+
+			webhookV2 := NewWebhookHandlerV2(s.Store)
+			r.Get("/api/v2/webhooks", webhookV2.List)
+			r.Post("/api/v2/webhooks", webhookV2.Create)
+			r.Put("/api/v2/webhooks/{id}", webhookV2.Update)
+			r.Delete("/api/v2/webhooks/{id}", webhookV2.Delete)
+			r.Post("/api/v2/webhooks/test", webhookV2.TestURL)
+			r.Post("/api/v2/webhooks/{id}/test", webhookV2.TestByID)
+
+			// Analytics V2 (Tenant Scoped)
+			analyticsV2 := NewAnalyticsHandlerV2(s.Store)
+			r.Get("/api/v2/analytics/dashboard", analyticsV2.DashboardTenant)
+			r.Get("/api/v2/analytics/deliverability", analyticsV2.DeliverabilityTenant)
 		})
 
 		// Superadmin Management
@@ -434,6 +498,13 @@ func (s *Server) routes() chi.Router {
 		r.Get("/api/v2/organizations/{id}", orgHandler.GetOrganization)
 		r.Put("/api/v2/organizations/{id}", orgHandler.UpdateOrganization)
 		r.Get("/api/v2/organizations/{id}/usage", orgHandler.GetOrganizationUsage)
+
+		// Per-tenant tracking & unsubscribe domain configuration
+		orgDomainHandler := NewOrgDomainHandler(s.Store)
+		r.Get("/api/v2/organizations/{id}/domain-config", orgDomainHandler.GetConfig)
+		r.Put("/api/v2/organizations/{id}/domain-config", orgDomainHandler.UpdateConfig)
+		r.Post("/api/v2/organizations/{id}/domain-config/verify-tracking", orgDomainHandler.VerifyTracking)
+		r.Post("/api/v2/organizations/{id}/domain-config/verify-unsubscribe", orgDomainHandler.VerifyUnsubscribe)
 	})
 
 	// --- Metrics endpoint (if enabled) ---
@@ -493,7 +564,9 @@ func (s *Server) routes() chi.Router {
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		logger.WithComponent("api").Error("json encode failed", "error", err)
+	}
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {

@@ -1,13 +1,16 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/mail"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -15,6 +18,7 @@ import (
 
 	"github.com/pulak-ranjan/sampmail/internal/config"
 	"github.com/pulak-ranjan/sampmail/internal/core"
+	"github.com/pulak-ranjan/sampmail/internal/middleware/custom"
 	"github.com/pulak-ranjan/sampmail/internal/models"
 	"github.com/pulak-ranjan/sampmail/internal/store"
 	"github.com/pulak-ranjan/sampmail/internal/validation"
@@ -46,14 +50,12 @@ type verify2FARequest struct {
 	Code string `json:"code"`
 }
 
-func generateToken() string {
+func generateToken() (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		// This should never happen, but if it does, panic because
-		// we cannot generate secure tokens without entropy
-		panic("crypto/rand failed: " + err.Error())
+		return "", fmt.Errorf("failed to generate secure token: %w", err)
 	}
-	return hex.EncodeToString(b)
+	return hex.EncodeToString(b), nil
 }
 
 // hashSessionToken hashes a session token for secure storage
@@ -105,6 +107,99 @@ func getClientIP(r *http.Request) string {
 	return ip
 }
 
+// ----------------------
+// 2FA Brute Force Protection (Redis-backed with in-memory fallback — fail-secure)
+// ----------------------
+
+const (
+	twoFAMaxAttempts  = 5
+	twoFALockDuration = 15 * time.Minute
+)
+
+// inMemory2FA is the in-process fallback store used when Redis is unavailable.
+// It maps adminID → (attempts, lockedUntil).
+var inMemory2FA struct {
+	sync.Mutex
+	attempts map[uint]int
+	locked   map[uint]time.Time
+}
+
+func init() {
+	inMemory2FA.attempts = make(map[uint]int)
+	inMemory2FA.locked = make(map[uint]time.Time)
+}
+
+func twoFAAttemptsKey(adminID uint) string {
+	return fmt.Sprintf("2fa:attempts:%d", adminID)
+}
+
+func twoFALockKey(adminID uint) string {
+	return fmt.Sprintf("2fa:locked:%d", adminID)
+}
+
+// check2FALocked returns true if the admin is locked out from 2FA attempts.
+// Falls back to the in-memory store when Redis is unavailable (fail-secure).
+func check2FALocked(adminID uint) bool {
+	rdb := custom.GetRedisClient()
+	if rdb != nil {
+		val, err := rdb.Get(context.Background(), twoFALockKey(adminID)).Result()
+		return err == nil && val == "1"
+	}
+	// In-memory fallback: check if still within lock window
+	inMemory2FA.Lock()
+	defer inMemory2FA.Unlock()
+	if until, ok := inMemory2FA.locked[adminID]; ok {
+		if time.Now().Before(until) {
+			return true
+		}
+		// Lock expired — clean up
+		delete(inMemory2FA.locked, adminID)
+		delete(inMemory2FA.attempts, adminID)
+	}
+	return false
+}
+
+// record2FAFailure increments failure count and locks if threshold exceeded.
+// Falls back to in-memory when Redis is unavailable.
+func record2FAFailure(adminID uint) {
+	rdb := custom.GetRedisClient()
+	if rdb != nil {
+		ctx := context.Background()
+		key := twoFAAttemptsKey(adminID)
+		count, _ := rdb.Incr(ctx, key).Result()
+		rdb.Expire(ctx, key, twoFALockDuration)
+		if count >= twoFAMaxAttempts {
+			rdb.Set(ctx, twoFALockKey(adminID), "1", twoFALockDuration)
+			rdb.Del(ctx, key)
+		}
+		return
+	}
+	// In-memory fallback
+	inMemory2FA.Lock()
+	defer inMemory2FA.Unlock()
+	inMemory2FA.attempts[adminID]++
+	if inMemory2FA.attempts[adminID] >= twoFAMaxAttempts {
+		inMemory2FA.locked[adminID] = time.Now().Add(twoFALockDuration)
+		delete(inMemory2FA.attempts, adminID)
+	}
+}
+
+// clear2FAAttempts clears the brute force counters on successful verification.
+func clear2FAAttempts(adminID uint) {
+	rdb := custom.GetRedisClient()
+	if rdb != nil {
+		ctx := context.Background()
+		rdb.Del(ctx, twoFAAttemptsKey(adminID))
+		rdb.Del(ctx, twoFALockKey(adminID))
+		return
+	}
+	// In-memory fallback
+	inMemory2FA.Lock()
+	defer inMemory2FA.Unlock()
+	delete(inMemory2FA.attempts, adminID)
+	delete(inMemory2FA.locked, adminID)
+}
+
 // POST /api/auth/register
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	var req authRequest
@@ -151,7 +246,11 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate token and store hash for security
-	token := generateToken()
+	token, err := generateToken()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate session token"})
+		return
+	}
 	tokenHash := hashSessionToken(token)
 	ip := getClientIP(r)
 	userAgent := r.UserAgent()
@@ -200,7 +299,11 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if admin.TwoFactorEnabled && admin.TwoFactorSecret != "" {
 		// If no TOTP code provided, return that 2FA is required
 		if req.TOTPCode == "" {
-			tempToken := generateToken()
+			tempToken, err := generateToken()
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate token"})
+				return
+			}
 			tempTokenHash := hashSessionToken(tempToken)
 			// Store temp token hash with short expiry (5 minutes)
 			s.Store.CreateSession(admin.ID, "2fa:"+tempTokenHash, getClientIP(r), r.UserAgent(), 5*time.Minute)
@@ -212,15 +315,25 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Validate TOTP code
+		// Validate TOTP code with brute force protection
+		if check2FALocked(admin.ID) {
+			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "2FA locked due to too many attempts, try again in 15 minutes"})
+			return
+		}
 		if !core.ValidateTOTP(admin.TwoFactorSecret, req.TOTPCode) {
+			record2FAFailure(admin.ID)
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid 2FA code"})
 			return
 		}
+		clear2FAAttempts(admin.ID)
 	}
 
 	// Create full session with hashed token
-	token := generateToken()
+	token, err := generateToken()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate session token"})
+		return
+	}
 	tokenHash := hashSessionToken(token)
 	ip := getClientIP(r)
 	userAgent := r.UserAgent()
@@ -283,28 +396,42 @@ func (s *Server) handleVerify2FA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find admin by temp token
-	admin, err := s.Store.GetAdminBySessionToken("2fa:" + tempToken)
+	// Hash the temp token for lookup (consistent with how it was stored)
+	tempTokenHash := hashSessionToken(tempToken)
+	
+	// Find admin by temp token (stored with "2fa:" prefix in the token field)
+	admin, err := s.Store.GetAdminBySessionToken("2fa:" + tempTokenHash)
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid or expired temp token"})
 		return
 	}
 
-	// Validate TOTP
+	// Validate TOTP with brute force protection
+	if check2FALocked(admin.ID) {
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "2FA locked due to too many attempts, try again in 15 minutes"})
+		return
+	}
 	if !core.ValidateTOTP(admin.TwoFactorSecret, req.Code) {
+		record2FAFailure(admin.ID)
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid 2FA code"})
 		return
 	}
+	clear2FAAttempts(admin.ID)
 
-	// Delete temp session
-	s.Store.DeleteSession("2fa:" + tempToken)
+	// Delete temp session (use the same hashed token)
+	s.Store.DeleteSession("2fa:" + tempTokenHash)
 
-	// Create full session
-	token := generateToken()
+	// Create full session with hashed token
+	token, err := generateToken()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate session token"})
+		return
+	}
+	tokenHash := hashSessionToken(token)
 	ip := getClientIP(r)
 	userAgent := r.UserAgent()
 
-	if err := s.Store.CreateSession(admin.ID, token, ip, userAgent, 7*24*time.Hour); err != nil {
+	if err := s.Store.CreateSession(admin.ID, tokenHash, ip, userAgent, 7*24*time.Hour); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create session"})
 		return
 	}

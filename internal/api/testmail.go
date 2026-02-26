@@ -19,9 +19,22 @@ type testEmailRequest struct {
 
 // POST /api/tools/send-test
 func (s *Server) handleSendTestEmail(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	var req testEmailRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+
+	req.SenderEmail = strings.TrimSpace(req.SenderEmail)
+	req.Recipient = strings.TrimSpace(req.Recipient)
+	req.Subject = strings.TrimSpace(req.Subject)
+
+	if strings.ContainsAny(req.SenderEmail, "\r\n") || strings.ContainsAny(req.Recipient, "\r\n") || strings.ContainsAny(req.Subject, "\r\n") {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid input"})
 		return
 	}
 

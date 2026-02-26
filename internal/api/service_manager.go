@@ -88,6 +88,10 @@ func (h *ServiceHandler) HandleGetStatus(w http.ResponseWriter, r *http.Request)
 
 // HandleInstall installs a service
 func (h *ServiceHandler) HandleInstall(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	serviceName := strings.TrimPrefix(r.URL.Path, "/api/services/")
 	serviceName = strings.TrimSuffix(serviceName, "/install")
 
@@ -122,6 +126,10 @@ func (h *ServiceHandler) HandleInstall(w http.ResponseWriter, r *http.Request) {
 
 // HandleStart starts a service
 func (h *ServiceHandler) HandleStart(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	serviceName := strings.TrimPrefix(r.URL.Path, "/api/services/")
 	serviceName = strings.TrimSuffix(serviceName, "/start")
 
@@ -147,6 +155,10 @@ func (h *ServiceHandler) HandleStart(w http.ResponseWriter, r *http.Request) {
 
 // HandleStop stops a service
 func (h *ServiceHandler) HandleStop(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	serviceName := strings.TrimPrefix(r.URL.Path, "/api/services/")
 	serviceName = strings.TrimSuffix(serviceName, "/stop")
 
@@ -172,6 +184,10 @@ func (h *ServiceHandler) HandleStop(w http.ResponseWriter, r *http.Request) {
 
 // HandleRestart restarts a service
 func (h *ServiceHandler) HandleRestart(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	serviceName := strings.TrimPrefix(r.URL.Path, "/api/services/")
 	serviceName = strings.TrimSuffix(serviceName, "/restart")
 

@@ -9,7 +9,10 @@ import (
 	"syscall"
 	"time"
 
+	"net/url"
+
 	"github.com/pulak-ranjan/sampmail/internal/api"
+	"github.com/pulak-ranjan/sampmail/internal/models"
 	"github.com/pulak-ranjan/sampmail/internal/config"
 	"github.com/pulak-ranjan/sampmail/internal/core"
 	"github.com/pulak-ranjan/sampmail/internal/logger"
@@ -109,7 +112,22 @@ func main() {
 		} else {
 			log.Info("Redis rate limiters initialized", "addr", cfg.RedisAddr)
 		}
+
+		// Initialize domain limiter with Redis
+		redisClient := custom.GetRedisClient()
+		if redisClient != nil {
+			core.InitDomainLimiter(redisClient)
+			log.Info("Domain rate limiter initialized with Redis")
+		}
 	}
+
+	// Initialize list hygiene manager
+	core.InitListHygiene(st)
+	log.Info("List hygiene manager initialized")
+
+	// Initialize retry manager with default policy
+	core.InitRetryManager(core.DefaultRetryPolicy())
+	log.Info("Retry manager initialized")
 
 	// Initialize circuit breakers
 	core.InitCircuitBreakers(func(name string, from, to core.CircuitState) {
@@ -145,6 +163,12 @@ func main() {
 
 	// Seed built-in email templates
 	api.SeedBuiltInTemplates(st)
+
+
+	// Auto-seed AppSettings.MainHostname from SAMPMAIL_BASE_URL on first run.
+	// This means tracking links and unsubscribe URLs work immediately without
+	// requiring the operator to visit the UI settings page.
+	autoSeedHostname(st, cfg.BaseURL)
 
 	// Initialize Core Services
 	ws := core.NewWebhookService(st)
@@ -385,5 +409,56 @@ func startScheduler(ctx context.Context, st *store.Store, ws *core.WebhookServic
 				ws.CheckBounceRates()
 			}()
 		}
+	}
+}
+
+// autoSeedHostname sets AppSettings.MainHostname from the configured base URL
+// if it has not been set yet.  Runs on every startup but only writes to the
+// database when the stored value is empty, so manual UI changes are preserved.
+func autoSeedHostname(st *store.Store, baseURL string) {
+	if baseURL == "" {
+		return
+	}
+
+	settings, err := st.GetSettings()
+	if err != nil {
+		settings = nil
+	}
+
+	// Extract hostname from baseURL: "https://mail.example.com" -> "mail.example.com"
+	parsed, parseErr := url.Parse(baseURL)
+	if parseErr != nil || parsed.Hostname() == "" {
+		return
+	}
+
+	if settings != nil && settings.MainHostname != "" {
+		// Already configured — respect what the operator set in the UI
+		return
+	}
+
+	if settings == nil {
+		// No settings row yet; create one with GORM
+		newSettings := &models.AppSettings{}
+		if upsertErr := st.UpsertSettings(newSettings); upsertErr != nil {
+			return
+		}
+		settings, err = st.GetSettings()
+		if err != nil || settings == nil {
+			return
+		}
+	}
+
+	// Use host:port when a non-standard port is in the URL
+	if parsed.Port() != "" {
+		settings.MainHostname = parsed.Host
+	} else {
+		settings.MainHostname = parsed.Hostname()
+	}
+
+	if upsertErr := st.UpsertSettings(settings); upsertErr != nil {
+		logger.WithComponent("main").Warn("could not auto-seed hostname", "error", upsertErr)
+	} else {
+		logger.WithComponent("main").Info("auto-seeded hostname from SAMPMAIL_BASE_URL",
+			"hostname", settings.MainHostname, "base_url", baseURL)
 	}
 }

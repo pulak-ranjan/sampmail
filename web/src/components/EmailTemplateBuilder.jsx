@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import DOMPurify from 'dompurify';
 import {
   LayoutTemplate, Image, Type, Columns, Footprints, MousePointer2,
   Smartphone, Monitor, Eye, Save, Sparkles, X, ArrowUp, ArrowDown,
@@ -524,7 +525,7 @@ const BlockPreview = ({ block }) => {
       return (
         <div
           style={baseStyle}
-          dangerouslySetInnerHTML={{ __html: content.html }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content.html || '', { USE_PROFILES: { html: true } }) }}
         />
       );
 
@@ -771,9 +772,17 @@ const AIGenerateModal = ({ onClose, onGenerate }) => {
   const handleGenerate = async () => {
     setLoading(true);
     try {
+      const token = localStorage.getItem('sampmail_token');
+      const orgId = localStorage.getItem('sampmail_org_id');
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      if (orgId) headers['X-Organization-ID'] = orgId;
+
       const response = await fetch('/api/v2/templates/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ prompt, category, tone }),
       });
       const result = await response.json();

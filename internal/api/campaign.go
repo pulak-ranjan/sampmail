@@ -36,9 +36,19 @@ func (h *CampaignHandler) Routes(r chi.Router) {
 }
 
 func (h *CampaignHandler) listCampaigns(w http.ResponseWriter, r *http.Request) {
+	org := getOrganizationFromContext(r.Context())
+	admin := getAdminFromContext(r.Context())
+
+	q := h.Store.DB.Order("created_at desc")
+	if org != nil && org.ID > 0 {
+		q = q.Where("organization_id = ?", org.ID)
+	} else if admin == nil || !admin.IsSuperAdmin {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "organization context required"})
+		return
+	}
+
 	var campaigns []models.Campaign
-	// Order by newest first
-	if err := h.Store.DB.Order("created_at desc").Find(&campaigns).Error; err != nil {
+	if err := q.Find(&campaigns).Error; err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
 		return
 	}
@@ -46,6 +56,17 @@ func (h *CampaignHandler) listCampaigns(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *CampaignHandler) createCampaign(w http.ResponseWriter, r *http.Request) {
+	org := getOrganizationFromContext(r.Context())
+	admin := getAdminFromContext(r.Context())
+
+	var organizationID uint
+	if org != nil && org.ID > 0 {
+		organizationID = org.ID
+	} else if admin == nil || !admin.IsSuperAdmin {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "organization context required"})
+		return
+	}
+
 	var req struct {
 		Name     string `json:"name"`
 		Subject  string `json:"subject"`
@@ -71,19 +92,26 @@ func (h *CampaignHandler) createCampaign(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Verify sender exists
+	// Verify sender exists and user has access to it
 	var sender models.Sender
-	if err := h.Store.DB.First(&sender, req.SenderID).Error; err != nil {
+	if err := h.Store.DB.Preload("Domain").First(&sender, req.SenderID).Error; err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "sender not found"})
 		return
 	}
 
+	// Non-superadmin: verify sender belongs to same org
+	if organizationID > 0 && sender.OrganizationID != organizationID {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "sender not accessible"})
+		return
+	}
+
 	campaign := models.Campaign{
-		Name:     req.Name,
-		Subject:  req.Subject,
-		Body:     req.Body,
-		SenderID: req.SenderID,
-		Status:   "draft",
+		Name:           req.Name,
+		Subject:        req.Subject,
+		Body:           req.Body,
+		SenderID:       req.SenderID,
+		Status:         "draft",
+		OrganizationID: organizationID,
 	}
 
 	if err := h.Store.DB.Create(&campaign).Error; err != nil {
@@ -95,8 +123,26 @@ func (h *CampaignHandler) createCampaign(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *CampaignHandler) importRecipients(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, _ := strconv.Atoi(idStr)
+
+	// Verify campaign ownership
+	if orgID > 0 {
+		var campaign models.Campaign
+		if err := h.Store.DB.First(&campaign, id).Error; err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "campaign not found"})
+			return
+		}
+		if campaign.OrganizationID != orgID {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "access denied"})
+			return
+		}
+	}
 
 	// Max 10MB CSV
 	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
@@ -129,8 +175,26 @@ func (h *CampaignHandler) importRecipients(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *CampaignHandler) startCampaign(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, _ := strconv.Atoi(idStr)
+
+	// Verify campaign ownership
+	if orgID > 0 {
+		var campaign models.Campaign
+		if err := h.Store.DB.First(&campaign, id).Error; err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "campaign not found"})
+			return
+		}
+		if campaign.OrganizationID != orgID {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "access denied"})
+			return
+		}
+	}
 
 	if err := h.Service.StartCampaign(uint(id)); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -141,6 +205,11 @@ func (h *CampaignHandler) startCampaign(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *CampaignHandler) getCampaign(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, _ := strconv.Atoi(idStr)
 
@@ -149,27 +218,48 @@ func (h *CampaignHandler) getCampaign(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 		return
 	}
+
+	if orgID > 0 && campaign.OrganizationID != orgID {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "access denied"})
+		return
+	}
+
 	writeJSON(w, http.StatusOK, campaign)
 }
 
 func (h *CampaignHandler) getCampaignStats(w http.ResponseWriter, r *http.Request) {
-	var stats struct {
-		TotalCampaigns  int64 `json:"total_campaigns"`
-		ActiveCampaigns int64 `json:"active_campaigns"`
-		DraftCampaigns  int64 `json:"draft_campaigns"`
-		SentCampaigns   int64 `json:"sent_campaigns"`
-		TotalSent       int64 `json:"total_sent"`
-		TotalOpen       int64 `json:"total_open"`
-		TotalClick      int64 `json:"total_click"`
-		TotalBounce     int64 `json:"total_bounce"`
+	org := getOrganizationFromContext(r.Context())
+	admin := getAdminFromContext(r.Context())
+
+	var orgID uint
+	if org != nil && org.ID > 0 {
+		orgID = org.ID
+	} else if admin == nil || !admin.IsSuperAdmin {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "organization context required"})
+		return
 	}
 
-	h.Store.DB.Model(&models.Campaign{}).Count(&stats.TotalCampaigns)
-	h.Store.DB.Model(&models.Campaign{}).Where("status = ?", "active").Count(&stats.ActiveCampaigns)
-	h.Store.DB.Model(&models.Campaign{}).Where("status = ?", "draft").Count(&stats.DraftCampaigns)
-	h.Store.DB.Model(&models.Campaign{}).Where("status = ?", "sent").Count(&stats.SentCampaigns)
+	var stats struct {
+		TotalCampaigns     int64 `json:"total_campaigns"`
+		ActiveCampaigns    int64 `json:"active_campaigns"`
+		DraftCampaigns     int64 `json:"draft_campaigns"`
+		CompletedCampaigns int64 `json:"completed_campaigns"`
+		ScheduledCampaigns int64 `json:"scheduled_campaigns"`
+		PausedCampaigns    int64 `json:"paused_campaigns"`
+		TotalSent          int64 `json:"total_sent"`
+		TotalOpen          int64 `json:"total_open"`
+		TotalClick         int64 `json:"total_click"`
+		TotalBounce        int64 `json:"total_bounce"`
+	}
 
-	// Get aggregate stats from campaign recipients if table exists
+	base := h.Store.DB.Model(&models.Campaign{}).Scopes(store.WithOrgFilterScope(orgID))
+	base.Count(&stats.TotalCampaigns)
+	base.Where("status = ?", "sending").Count(&stats.ActiveCampaigns)
+	base.Where("status = ?", "draft").Count(&stats.DraftCampaigns)
+	base.Where("status = ?", "completed").Count(&stats.CompletedCampaigns)
+	base.Where("status = ?", "scheduled").Count(&stats.ScheduledCampaigns)
+	base.Where("status = ?", "paused").Count(&stats.PausedCampaigns)
+
 	h.Store.DB.Model(&models.CampaignRecipient{}).Count(&stats.TotalSent)
 
 	writeJSON(w, http.StatusOK, stats)

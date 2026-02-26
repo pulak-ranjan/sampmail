@@ -50,8 +50,9 @@ type AppSettings struct {
 
 // A domain managed by the system
 type Domain struct {
-	ID   uint   `gorm:"primaryKey" json:"id"`
-	Name string `gorm:"uniqueIndex" json:"name"`
+	ID             uint   `gorm:"primaryKey" json:"id"`
+	OrganizationID uint   `gorm:"index" json:"organization_id"`
+	Name           string `gorm:"uniqueIndex:idx_domain_org_name" json:"name"`
 
 	MailHost   string `json:"mail_host"`
 	BounceHost string `json:"bounce_host"`
@@ -102,8 +103,9 @@ type BounceAccount struct {
 
 // A sender identity associated with a domain
 type Sender struct {
-	ID       uint   `gorm:"primaryKey" json:"id"`
-	DomainID uint   `gorm:"index" json:"domain_id"`
+	ID             uint   `gorm:"primaryKey" json:"id"`
+	OrganizationID uint   `gorm:"index" json:"organization_id"`
+	DomainID       uint   `gorm:"index" json:"domain_id"`
 	Domain   Domain `json:"-" gorm:"foreignKey:DomainID"` // Relation for Warmup Logic
 
 	LocalPart    string `json:"local_part"`
@@ -237,12 +239,13 @@ type WebhookLog struct {
 
 // APIKey for external applications (NEW)
 type APIKey struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	Name      string    `json:"name"`                   // e.g. "EmailVerifier App"
-	Key       string    `gorm:"uniqueIndex" json:"key"` // The secret token
-	Scopes    string    `json:"scopes"`                 // e.g. "verify,relay"
-	CreatedAt time.Time `json:"created_at"`
-	LastUsed  time.Time `json:"last_used"`
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	OrganizationID uint      `gorm:"index" json:"organization_id"`
+	Name           string    `json:"name"`                   // e.g. "EmailVerifier App"
+	Key            string    `gorm:"uniqueIndex" json:"key"` // The secret token
+	Scopes         string    `json:"scopes"`                 // e.g. "verify,relay"
+	CreatedAt      time.Time `json:"created_at"`
+	LastUsed       time.Time `json:"last_used"`
 }
 
 // ChatLog stores AI conversation history (NEW)
@@ -284,8 +287,9 @@ type Contact struct {
 
 // Campaign represents a bulk email job
 type Campaign struct {
-	ID       uint   `gorm:"primaryKey" json:"id"`
-	Name     string `json:"name"`
+	ID             uint   `gorm:"primaryKey" json:"id"`
+	OrganizationID uint   `gorm:"index" json:"organization_id"`
+	Name           string `json:"name"`
 	Subject  string `json:"subject"`
 	Body     string `json:"body"`      // HTML Content
 	SenderID uint   `json:"sender_id"` // From which Sender identity
@@ -342,16 +346,18 @@ type WhatsAppMessage struct {
 
 // Suppression represents an email that should never be sent to
 type Suppression struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	Email     string    `gorm:"uniqueIndex" json:"email"`
-	Reason    string    `json:"reason"` // "hard_bounce", "unsubscribe", "complaint", "manual"
-	Source    string    `json:"source"` // Campaign ID or "manual" or "fbl"
-	CreatedAt time.Time `json:"created_at"`
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	OrganizationID uint      `gorm:"index;uniqueIndex:idx_suppression_org_email" json:"organization_id"`
+	Email          string    `gorm:"uniqueIndex:idx_suppression_org_email" json:"email"`
+	Reason         string    `json:"reason"` // "hard_bounce", "unsubscribe", "complaint", "manual"
+	Source         string    `json:"source"` // Campaign ID or "manual" or "fbl"
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 // BounceEvent represents a processed bounce from the mail server
 type BounceEvent struct {
 	ID             uint      `gorm:"primaryKey" json:"id"`
+	OrganizationID uint      `gorm:"index" json:"organization_id"`
 	Email          string    `gorm:"index" json:"email"`
 	BounceType     string    `json:"bounce_type"` // "hard", "soft", "complaint"
 	BounceCode     string    `json:"bounce_code"` // e.g., "550", "452"
@@ -359,6 +365,18 @@ type BounceEvent struct {
 	CampaignID     uint      `gorm:"index" json:"campaign_id"`
 	ProcessedAt    time.Time `json:"processed_at"`
 	RawMessage     string    `json:"raw_message"` // Original bounce message (truncated)
+}
+
+// ComplaintLog represents a spam complaint from FBL
+type ComplaintLog struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	Email        string    `gorm:"index" json:"email"`
+	FeedbackType string    `json:"feedback_type"` // abuse, fraud, not-spam, opt-out, other
+	Provider     string    `json:"provider"`      // gmail, outlook, yahoo, etc.
+	CampaignID   uint      `gorm:"index" json:"campaign_id"`
+	ReceivedAt   time.Time `json:"received_at"`
+	SourceIP     string    `json:"source_ip"`
+	UserAgent    string    `json:"user_agent"`
 }
 
 // ProcessedLogFile tracks which log files have been processed and to what offset

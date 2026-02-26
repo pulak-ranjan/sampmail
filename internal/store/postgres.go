@@ -83,6 +83,17 @@ func NewPostgresStore(cfg *PostgresConfig) (*Store, error) {
 // This uses GORM AutoMigrate which handles all table creation
 // V2 raw SQL migrations are NOT needed for PostgreSQL as GORM handles it
 func MigratePostgres(st *Store) error {
+	// Drop old single-column unique indexes that are being replaced with composite ones.
+	// GORM AutoMigrate does not drop indexes automatically, so we must do it manually.
+	// These are safe to run even if the indexes don't exist (IF EXISTS).
+	dropSQL := []string{
+		"DROP INDEX IF EXISTS idx_domains_name",
+		"DROP INDEX IF EXISTS idx_suppressions_email",
+	}
+	for _, sql := range dropSQL {
+		st.DB.Exec(sql)
+	}
+
 	return st.DB.AutoMigrate(
 		// Core models
 		&models.AppSettings{},
@@ -140,5 +151,11 @@ func MigratePostgres(st *Store) error {
 		&models.AutomationActionLog{},
 		&models.APIKeyV2{},
 		&models.WebhookV2{},
+		&models.TagV2{},
+		&models.ContactTagV2{},
+		&models.SegmentV2{},
+		&models.SuppressionV2{},
+		// Per-tenant custom domain config (tracking + unsubscribe domains)
+		&models.OrganizationDomainConfig{},
 	)
 }

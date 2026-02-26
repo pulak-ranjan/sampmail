@@ -1,31 +1,10 @@
-# SampMail - Self-Hosted Email Marketing Platform
+# SampMail
 
-<p align="center">
-  <img src="docs/logo/sampmail-logo.png" alt="SampMail Logo" width="200">
-</p>
-
-<p align="center">
-  <strong>Enterprise-grade email marketing with full control over your infrastructure</strong>
-</p>
-
-<p align="center">
-  <a href="#features">Features</a> •
-  <a href="#installation">Installation</a> •
-  <a href="#configuration">Configuration</a> •
-  <a href="#api-documentation">API</a> •
-  <a href="#license">License</a>
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/version-0.2.0-blue.svg" alt="Version 0.2.0">
-  <img src="https://img.shields.io/badge/license-AGPL--3.0-green.svg" alt="License AGPL-3.0">
-  <img src="https://img.shields.io/badge/go-1.21+-00ADD8.svg" alt="Go 1.21+">
-  <img src="https://img.shields.io/badge/node-18+-339933.svg" alt="Node 18+">
-</p>
+SampMail is a self-hosted email marketing platform built with Go and React. It gives you complete control over your email infrastructure, subscriber data, and sending pipeline. There are no per-email fees after initial setup and no third-party access to your data.
 
 ---
 
-## 📋 Table of Contents
+## Table of Contents
 
 - [Overview](#overview)
 - [Features](#features)
@@ -34,8 +13,8 @@
 - [Configuration](#configuration)
 - [Dashboard](#dashboard)
 - [API Documentation](#api-documentation)
-- [Version Control & Updates](#version-control--updates)
 - [Security](#security)
+- [Updates](#updates)
 - [Contributing](#contributing)
 - [License](#license)
 - [Support](#support)
@@ -44,479 +23,349 @@
 
 ## Overview
 
-SampMail is a powerful, self-hosted email marketing platform designed for businesses that need complete control over their email infrastructure. Built with Go for performance and React for a modern user experience.
+SampMail handles the full email marketing lifecycle: subscriber management, campaign authoring, sending via KumoMTA, open and click tracking, bounce processing, suppression list management, and delivery analytics. All components run on infrastructure you own.
 
-### Why SampMail?
-
-- **Full Control**: Own your data and infrastructure
-- **Cost Effective**: No per-email fees after setup
-- **Privacy First**: Your subscriber data never leaves your servers
-- **Scalable**: Handle millions of emails with proper infrastructure
-- **Extensible**: REST API for custom integrations
+The backend is written in Go (Chi router, GORM, PostgreSQL or SQLite). The frontend is React with Tailwind CSS. The sending engine delegates to KumoMTA on port 587 with a connection pool and circuit breaker. Email verification is handled by an optional Reacher integration.
 
 ---
 
 ## Features
 
-### 📧 Email Campaigns
-- Drag-and-drop email builder
+### Email Campaigns
+
+- HTML and plain-text composition
 - MJML template support
+- Personalization with merge tags (name, email, organization, custom fields)
 - A/B testing
-- Scheduled sending
-- Real-time analytics
+- Scheduled sending with timezone support
+- Real-time open and click tracking with HMAC-signed links
 
-### 🤖 Marketing Automation
-- Visual automation builder
-- Trigger-based workflows
-- Behavioral targeting
+### Marketing Automation
+
+- Trigger-based workflows (subscribe, open, click, date-based)
+- Drip sequences
+- Behavioral branching
 - Lead scoring
-- Drip campaigns
 
-### 📊 Analytics & Reporting
-- Real-time open/click tracking
-- Bounce management
-- Engagement scoring
-- Custom reports
-- Export capabilities
+### Analytics
 
-### 🔐 Security & Compliance
-- DKIM/SPF/DMARC support
-- Automatic bounce handling
-- Suppression list management
-- Rate limiting
-- GDPR-ready unsubscribe
+- Real-time open and click counters (atomic, race-free)
+- Bounce rate, complaint rate, unsubscribe rate
+- Deliverability trend data
+- Per-campaign and aggregate reporting
 
-### 🛠 Infrastructure
-- **Powered by KumoMTA** (High-performance delivery engine)
-- Multi-domain support
-- IP warmup management
-- SMTP connection pooling
-- Circuit breaker patterns
-- Health monitoring
-- **Proxy Rotation Manager** (SOCKS5/HTTP support)
+### Compliance and Deliverability
 
-### 🆕 V2 Features (0.2.0)
-- **Admin Dashboard** - System-wide health, services, security management
-- **User Dashboard** - Org-scoped campaign stats, performance, activity
-- **Service Manager** - One-click install/start/stop for KumoMTA, Dovecot, Reacher
-- Multi-tenant organizations with isolation
-- Organization Switcher in sidebar
-- **AI-powered Agent** (OpenAI, DeepSeek, Google Gemini)
-- Advanced personalization engine
-- Enhanced API with pagination
-- Disabled public registration (admin-only user creation)
+- DKIM signing (per-domain keys stored encrypted)
+- SPF and DMARC guidance
+- RFC-8058 one-click unsubscribe header
+- List-Unsubscribe header
+- Automatic bounce classification (hard, soft, FBL complaint)
+- Suppression list enforced on every send
+- GDPR-ready unsubscribe flow
+
+### Infrastructure
+
+- KumoMTA integration (high-performance MTA on port 587)
+- SMTP connection pool with configurable concurrency
+- Circuit breaker on SMTP failures
+- Redis-backed rate limiting with in-memory fallback
+- Multi-tenant organizations with full data isolation
+- Optional Reacher integration for email address verification
+- SOCKS5 and HTTP proxy rotation manager
+
+### V2 Features (0.2.0)
+
+- Multi-tenant organization model with role-based access
+- Organization switcher in the sidebar
+- Admin dashboard with system-wide health and service status
+- One-click install, start, and stop for KumoMTA, Dovecot, and Reacher from the dashboard
+- AI writing assistant (OpenAI, DeepSeek, Google Gemini)
+- Enhanced REST API with pagination and cursor support
+- Disabled public registration (admin-controlled user provisioning)
 
 ---
 
 ## System Requirements
 
-### Minimum Requirements
-| Component | Requirement |
-|-----------|-------------|
-| CPU | 2 cores |
-| RAM | 4 GB |
-| Storage | 20 GB SSD |
-| OS | Ubuntu 22.04+ / Rocky Linux 9+ |
+### Minimum
+
+| Component | Requirement                       |
+|-----------|-----------------------------------|
+| CPU       | 2 cores                           |
+| RAM       | 4 GB                              |
+| Storage   | 20 GB SSD                         |
+| OS        | Ubuntu 22.04+ or Rocky Linux 9+   |
 
 ### Recommended for Production
-| Component | Requirement |
-|-----------|-------------|
-| CPU | 4+ cores |
-| RAM | 8+ GB |
-| Storage | 100+ GB SSD |
-| Database | PostgreSQL 14+ |
-| Cache | Redis 7+ |
+
+| Component | Requirement            |
+|-----------|------------------------|
+| CPU       | 4+ cores               |
+| RAM       | 8+ GB                  |
+| Storage   | 100+ GB SSD            |
+| Database  | PostgreSQL 14+         |
+| Cache     | Redis 7+               |
 
 ### Software Dependencies
+
 - Go 1.21+
 - Node.js 18+
-- PostgreSQL 14+ (recommended) or SQLite
-- Redis 7+ (optional, for rate limiting)
-- Nginx (reverse proxy)
+- PostgreSQL 14+ (recommended) or SQLite (development only)
+- Redis 7+ (optional, for rate limiting and caching)
+- Nginx (recommended as reverse proxy for TLS termination)
 
 ---
 
 ## Installation
 
-### Prerequisites (Fresh VPS)
+### Quick Install (Ubuntu / Debian VPS)
+
+The install script handles all dependencies: Go, Node.js, PostgreSQL, Redis, KumoMTA, and Nginx. It auto-detects your server's public IP, generates all secrets, and configures the service.
 
 ```bash
-# Update system and install git (if not installed)
-sudo apt update && sudo apt upgrade -y
-sudo apt install -y git curl
-```
-
-### Quick Install (Ubuntu/Debian)
-
-```bash
-# Download and run installer (recommended - handles all dependencies)
-curl -sSL https://raw.githubusercontent.com/pulak-ranjan/sampmail/main/scripts/install.sh | sudo bash
-
-# Or clone and install manually
+sudo apt update && sudo apt install -y git curl
 git clone https://github.com/pulak-ranjan/sampmail.git
 cd sampmail
-sudo ./scripts/install-ubuntu.sh
+sudo bash scripts/install.sh
 ```
 
-### Quick Install (Rocky Linux/RHEL)
+To override the auto-detected URL:
 
 ```bash
-# Update system and install git (if not installed)
-sudo dnf update -y
-sudo dnf install -y git curl
-
-# Clone and install
-git clone https://github.com/pulak-ranjan/sampmail.git
-cd sampmail
-sudo ./scripts/install-rocky.sh
+sudo bash scripts/install.sh --url https://mail.yourdomain.com
 ```
 
-### Docker Installation
+### Docker Compose
 
 ```bash
-# Install Docker (if not installed)
 curl -fsSL https://get.docker.com | sudo sh
-
-# Clone and run
 git clone https://github.com/pulak-ranjan/sampmail.git
 cd sampmail
-sudo docker-compose up -d
+cp .env.example .env
+# Edit .env and set SAMPMAIL_SECRET and SAMPMAIL_BASE_URL
+sudo docker compose up -d
 ```
 
 ### Manual Installation
 
-See [INSTALLATION.md](docs/INSTALLATION.md) for detailed manual installation instructions.
+See [docs/INSTALLATION.md](docs/INSTALLATION.md) for step-by-step manual installation, Nginx and TLS configuration, KumoMTA setup, and building from source.
 
 ---
 
 ## Configuration
 
-### Environment Variables
-
-Copy the example configuration:
+Copy the example environment file and edit the required values:
 
 ```bash
 cp .env.example .env
 ```
 
-Key configuration options:
+### Required Variables
+
+```env
+# Master secret: all encryption and session keys are derived from this value.
+# Generate with: openssl rand -base64 32
+SAMPMAIL_SECRET=your-secret-here
+
+# Public base URL of this installation.
+# Used in tracking links, unsubscribe URLs, and RFC-8058 headers.
+SAMPMAIL_BASE_URL=https://mail.yourdomain.com
+
+# PostgreSQL password
+SAMPMAIL_PG_PASSWORD=your-database-password
+```
+
+### Common Optional Variables
 
 ```env
 # Server
-SAMPMAIL_LISTEN_ADDR=:9000
-SAMPMAIL_BASE_URL=https://mail.yourdomain.com
+SAMPMAIL_LISTEN_ADDR=0.0.0.0:9000
 
-# Database (PostgreSQL recommended for production)
-SAMPMAIL_DATABASE_DRIVER=postgres
-SAMPMAIL_POSTGRES_HOST=localhost
-SAMPMAIL_POSTGRES_PORT=5432
-SAMPMAIL_POSTGRES_USER=sampmail
-SAMPMAIL_POSTGRES_PASSWORD=your_secure_password
-SAMPMAIL_POSTGRES_DATABASE=sampmail
+# Database (defaults to SQLite if not set)
+SAMPMAIL_DB_DRIVER=postgres
+SAMPMAIL_PG_HOST=localhost
+SAMPMAIL_PG_PORT=5432
+SAMPMAIL_PG_USER=sampmail
+SAMPMAIL_PG_DBNAME=sampmail
 
-# Redis (optional but recommended)
+# Redis
 SAMPMAIL_REDIS_ADDR=localhost:6379
 
-# SMTP
-SAMPMAIL_SMTP_ADDR=localhost:25
+# SMTP (KumoMTA)
+SAMPMAIL_SMTP_ADDR=localhost:587
 SAMPMAIL_SMTP_MAX_CONNS=50
 
-# Security
-SAMPMAIL_JWT_SECRET=your_32_char_secret_here
-SAMPMAIL_ENCRYPTION_KEY=your_32_char_key_here
-
-# AI Features (optional)
+# AI assistant (optional)
 SAMPMAIL_OPENAI_API_KEY=sk-...
 ```
 
-See [.env.example](.env.example) for all available options.
+See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the complete variable reference and key derivation details.
 
 ---
 
 ## Dashboard
 
-Access the dashboard at `http://your-server:9000` after installation.
+After installation, open the address shown by the install script in your browser.
 
-### Default Credentials
+Default credentials created on first run:
+
 ```
-Email: admin@localhost
+Email:    admin@localhost
 Password: admin123
 ```
 
-⚠️ **Change these immediately after first login!**
+Change the password and email address immediately after first login. Enable two-factor authentication for all administrator accounts.
 
-### Dashboard Features
-- Campaign management
-- Subscriber lists
-- Template builder
-- Analytics
-- Domain configuration
-- System health monitoring
-- **One-click updates** (see below)
+### Dashboard Sections
+
+| Section          | Description                                               |
+|------------------|-----------------------------------------------------------|
+| Campaigns        | Create, schedule, and monitor email campaigns             |
+| Lists            | Manage subscriber lists and segments                      |
+| Templates        | Author and version HTML and MJML templates                |
+| Contacts         | Import CSV, view subscriber profiles and activity         |
+| Automations      | Build trigger-based workflow sequences                    |
+| Domains          | Configure sending domains and DKIM keys                   |
+| Analytics        | Open, click, bounce, and unsubscribe reporting            |
+| System (admin)   | Service health, KumoMTA control, update management        |
+| Organizations    | Manage tenants and user assignments (superadmin)          |
 
 ---
 
 ## API Documentation
 
-Full API documentation is available at `/api/docs` when running the server.
-
-### Quick Examples
+The REST API uses bearer token authentication. Obtain a token from the login endpoint and include it in the Authorization header of subsequent requests.
 
 ```bash
-# Authentication
-curl -X POST http://localhost:9000/api/auth/login \
+# Login
+curl -s -X POST http://localhost:9000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@localhost","password":"admin123"}'
 
 # List campaigns
-curl http://localhost:9000/api/campaigns \
+curl -s http://localhost:9000/api/v2/campaigns \
   -H "Authorization: Bearer YOUR_TOKEN"
 
-# Create campaign
-curl -X POST http://localhost:9000/api/campaigns \
+# Create a campaign
+curl -s -X POST http://localhost:9000/api/v2/campaigns \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name":"My Campaign","subject":"Hello!","html_content":"<p>Hi {{name}}</p>"}'
+  -d '{"name":"Welcome Series","subject":"Welcome to our list","status":"draft"}'
 ```
 
-See [API.md](docs/API.md) for complete documentation.
+See [docs/API.md](docs/API.md) for the complete endpoint reference including request bodies, response shapes, and error codes.
 
 ---
 
-## Version Control & Updates
+## Security
 
-SampMail includes a built-in version control system with one-click updates from the dashboard.
+- All encryption and session keys are derived from `SAMPMAIL_SECRET` using PBKDF2-SHA256 (100,000 iterations) with separate salts. A single secret is the only credential you need to manage.
+- Session tokens are 32 random bytes. The raw token is never stored; only its HMAC-SHA256 hash is persisted.
+- Passwords are hashed with bcrypt at cost factor 12 or higher.
+- Tracking links (open pixel and click redirect) are HMAC-signed. Requests with invalid signatures return 403.
+- Rate limiting is enforced on authentication, 2FA, and password reset endpoints.
+- TOTP two-factor authentication is available for all user accounts.
 
-### Current Version
+See [docs/SECURITY.md](docs/SECURITY.md) for the full security model, hardening checklist, and vulnerability reporting instructions.
 
-```
-Version: 0.1.12
-Release Date: December 29, 2025
-Release Channel: stable
-```
+---
 
-### Version Information API
+## Updates
 
-```bash
-# Check current version
-GET /api/version
-
-# Response:
-{
-  "version": "0.1.12",
-  "build_time": "2025-12-29T00:00:00Z",
-  "git_commit": "abc123...",
-  "channel": "stable",
-  "go_version": "go1.21",
-  "os": "linux",
-  "arch": "amd64"
-}
-```
-
-### Automatic Update Check
-
-SampMail checks for updates every 24 hours and displays notifications in the dashboard when updates are available.
-
-### One-Click Updates
-
-1. Navigate to **Settings → System → Updates** in the dashboard
-2. Click **Check for Updates**
-3. Review the changelog
-4. Click **Update to v2.x.x**
-5. Wait for automatic restart
-
-### Update Channels
-
-| Channel | Description | Recommended For |
-|---------|-------------|-----------------|
-| `lts` | Long Term Support - stable, security fixes only | Production |
-| `stable` | Regular stable releases | Most users |
-| `beta` | Pre-release features | Testing |
-
-Configure in `.env`:
-```env
-SAMPMAIL_UPDATE_CHANNEL=lts
-```
-
-### Manual Updates
+### Checking the Current Version
 
 ```bash
-# Stop the service
+curl -s http://localhost:9000/api/system/health | jq .version
+```
+
+### Manual Update
+
+```bash
 sudo systemctl stop sampmail
-
-# Backup database
 pg_dump sampmail > backup_$(date +%Y%m%d).sql
 
-# Pull latest version
 cd /opt/sampmail
 git fetch origin
-git checkout v2.1.0  # or latest tag
+git checkout v0.2.1   # replace with target version
 
-# Rebuild
 go build -o sampmail ./cmd/server
-cd web && npm install && npm run build && cd ..
+cd web && npm ci && npm run build && cd ..
 
-# Run migrations
-./sampmail migrate
-
-# Start service
 sudo systemctl start sampmail
 ```
 
 ### Rollback
 
 ```bash
-# Stop service
 sudo systemctl stop sampmail
-
-# Checkout previous version
-git checkout v2.0.0
-
-# Rebuild and restart
+git checkout v0.2.0
 go build -o sampmail ./cmd/server
 sudo systemctl start sampmail
 ```
 
 ---
 
-## Security
-
-### Security Features
-- JWT authentication with refresh tokens
-- TOTP two-factor authentication
-- Rate limiting (Redis-backed)
-- Input validation and sanitization
-- SQL injection prevention (GORM)
-- XSS protection
-- CSRF tokens
-- Encrypted password storage (bcrypt)
-- Encrypted sensitive data (AES-256)
-
-### Security Best Practices
-
-1. **Change default credentials immediately**
-2. **Use HTTPS** with valid SSL certificates
-3. **Enable 2FA** for admin accounts
-4. **Regular backups** of database and DKIM keys
-5. **Keep updated** via one-click updates
-6. **Monitor logs** for suspicious activity
-
-### Reporting Vulnerabilities
-
-Please report security vulnerabilities to: cloudnesh@gmail.com
-
-See [SECURITY.md](docs/SECURITY.md) for our security policy.
-
----
-
 ## Contributing
 
-We welcome contributions! Please read our [Contributing Guide](docs/CONTRIBUTING.md) before submitting PRs.
+1. Fork the repository.
+2. Create a feature branch: `git checkout -b feature/my-feature`
+3. Make your changes, add tests where applicable.
+4. Format Go code with `gofmt` and lint with `golangci-lint run`.
+5. Format frontend code with the project ESLint and Prettier configuration.
+6. Open a pull request against the `main` branch.
 
-### Development Setup
-
-```bash
-# Clone repository
-git clone https://github.com/pulak-ranjan/sampmail.git
-cd sampmail
-
-# Install Go dependencies
-go mod download
-
-# Install Node dependencies
-cd web && npm install && cd ..
-
-# Run in development mode
-make dev
-```
-
-### Code Style
-- Go: `gofmt` and `golint`
-- JavaScript: ESLint with Prettier
-- Commits: Conventional Commits format
+See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for the full contribution guide.
 
 ---
 
 ## License
 
-SampMail is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
+SampMail is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 
-```
-SampMail - Self-Hosted Email Marketing Platform
-Copyright (C) 2025 Pulak Ranjan
+This means:
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+- You may use, modify, and distribute SampMail freely.
+- If you run a modified version as a network service, you must make the modified source code available to users of that service.
+- Derivative works must be licensed under the same terms.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU Affero General Public License for more details.
+For businesses that need to keep modifications private or white-label the product, a commercial license is available. Contact cloudnesh@gmail.com.
 
-You should have received a copy of the GNU Affero General Public License
-along with this program. If not, see <https://www.gnu.org/licenses/>.
-```
-
-### What AGPL-3.0 Means
-
-- ✅ **Free to use** for personal and internal purposes
-- ✅ **Free to modify** and create derivative works
-- ✅ **Free to distribute** copies
-- ⚠️ **Must disclose source** of any modifications
-- ⚠️ **Network use is distribution** - if you run a modified version as a service, you must provide source code to users
-- ⚠️ **Must use same license** for derivative works
-
-### Commercial License
-
-For businesses that want to use SampMail without open source obligations (keep modifications private, white-label, etc.), a commercial license is available. Contact: cloudnesh@gmail.com
-
-See [LICENSE.md](LICENSE.md) for the full license text.
+See [LICENSE](LICENSE) for the full license text.
 
 ---
 
 ## Support
 
 ### Documentation
-- [Installation Guide](docs/INSTALLATION.md)
-- [API Reference](docs/API.md)
-- [DNS & IP Reputation Guide](docs/DNS_AND_REPUTATION.md) ⚠️ **Important**
-- [Security Policy](docs/SECURITY.md)
-- [Changelog](docs/CHANGELOG.md)
 
-### Community
-- GitHub Issues: Bug reports and feature requests
-- GitHub Discussions: Questions and community support
+| Document                              | Contents                                                 |
+|---------------------------------------|----------------------------------------------------------|
+| [docs/INSTALLATION.md](docs/INSTALLATION.md) | Full install guide, Nginx, TLS, KumoMTA, troubleshooting |
+| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | All environment variables and key derivation             |
+| [docs/API.md](docs/API.md)            | Complete REST API reference                              |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design, request lifecycle, data flow              |
+| [docs/CAMPAIGNS.md](docs/CAMPAIGNS.md) | Campaign lifecycle, tracking, deliverability             |
+| [docs/SECURITY.md](docs/SECURITY.md)  | Security model, hardening, vulnerability reporting       |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | Release history                                          |
 
-### Commercial Support
-For enterprise support, custom development, or consulting:
-- Email: cloudnesh@gmail.com
-- Website: https://pulak-ranjan.github.io/me/
+### Community and Commercial Support
+
+- GitHub Issues: bug reports and feature requests
+- GitHub Discussions: questions and usage help
+- Commercial support and custom development: cloudnesh@gmail.com
 
 ---
 
 ## Acknowledgments
 
-SampMail is built with these amazing open-source projects:
+SampMail is built on the following open-source projects:
 
-### Core Infrastructure
-- [KumoMTA](https://kumomta.com/) - High-performance MTA (Mail Transfer Agent)
-- [Reacher.email](https://reacher.email/) - Email verification service
-
-### Backend
+- [KumoMTA](https://kumomta.com/) - High-performance mail transfer agent
+- [Reacher](https://reacher.email/) - Email address verification
 - [Go](https://golang.org/) - Backend language
 - [Chi](https://github.com/go-chi/chi) - HTTP router
-- [GORM](https://gorm.io/) - ORM
-- [Redis](https://redis.io/) - Caching and delayed queue
-
-### Frontend
+- [GORM](https://gorm.io/) - ORM and migration layer
 - [React](https://reactjs.org/) - Frontend framework
-- [Tailwind CSS](https://tailwindcss.com/) - Styling
-- [Lucide](https://lucide.dev/) - Icons
-
----
-
-<p align="center">
-  Made with ❤️ by the SampMail Community
-</p>
+- [Tailwind CSS](https://tailwindcss.com/) - Utility-first CSS framework
+- [Redis](https://redis.io/) - Rate limiting and caching

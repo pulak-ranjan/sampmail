@@ -20,7 +20,8 @@ func LoadSnapshot(st *store.Store) (*Snapshot, error) {
 	}
 	// settings can be nil if not configured yet
 
-	domains, err := st.ListDomains()
+	// orgID=0: snapshot covers all domains across all orgs (system-level view)
+	domains, err := st.ListDomains(0)
 	if err != nil {
 		return nil, err
 	}

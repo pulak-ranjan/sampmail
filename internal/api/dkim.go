@@ -25,9 +25,15 @@ type dkimRecordDTO struct {
 
 // POST /api/dkim/generate
 // Body:
-//   { "domain": "example.com", "local_part": "editor" }
+//
+//	{ "domain": "example.com", "local_part": "editor" }
+//
 // or { "domain": "example.com" } to generate for all senders.
 func (s *Server) handleGenerateDKIM(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	var req dkimGenerateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -74,10 +80,10 @@ func (s *Server) handleGenerateDKIM(w http.ResponseWriter, r *http.Request) {
 		}
 
 		writeJSON(w, http.StatusOK, map[string]string{
-			"status":      "ok",
-			"domain":      d.Name,
-			"local_part":  req.LocalPart,
-			"message":     "dkim key generated",
+			"status":     "ok",
+			"domain":     d.Name,
+			"local_part": req.LocalPart,
+			"message":    "dkim key generated",
 		})
 		return
 	}
@@ -99,6 +105,10 @@ func (s *Server) handleGenerateDKIM(w http.ResponseWriter, r *http.Request) {
 // GET /api/dkim
 // Returns DNS-ready DKIM TXT records for all domains/senders that have pub keys.
 func (s *Server) handleListDKIM(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	snap, err := core.LoadSnapshot(s.Store)
 	if err != nil {
 		s.Store.LogError(err)

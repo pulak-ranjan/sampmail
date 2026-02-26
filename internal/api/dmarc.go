@@ -127,7 +127,8 @@ func (s *Server) handleGetDMARCReports(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/dmarc/stats - Returns DMARC statistics summary
 func (s *Server) handleGetDMARCStats(w http.ResponseWriter, r *http.Request) {
-	domains, _ := s.Store.ListDomains()
+	// orgID=0: DMARC stats are system-wide (superadmin only endpoint)
+	domains, _ := s.Store.ListDomains(0)
 
 	stats := map[string]interface{}{
 		"total_domains":     len(domains),

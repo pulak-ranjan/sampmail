@@ -27,6 +27,10 @@ func NewTagHandler(st *store.Store) *TagHandler {
 
 // GET /api/tags
 func (h *TagHandler) List(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	var tags []models.Tag
 	if err := h.Store.DB.Order("name").Find(&tags).Error; err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -51,6 +55,10 @@ func (h *TagHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/tags
 func (h *TagHandler) Create(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	var tag models.Tag
 	if err := json.NewDecoder(r.Body).Decode(&tag); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -82,6 +90,10 @@ func (h *TagHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // PUT /api/tags/:id
 func (h *TagHandler) Update(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
 
 	var tag models.Tag
@@ -113,6 +125,10 @@ func (h *TagHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/tags/:id
 func (h *TagHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
 
 	// Delete tag associations first
@@ -128,6 +144,10 @@ func (h *TagHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/subscribers/:id/tags
 func (h *TagHandler) AddToSubscriber(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	contactID, _ := strconv.Atoi(chi.URLParam(r, "id"))
 
 	var req struct {
@@ -153,6 +173,10 @@ func (h *TagHandler) AddToSubscriber(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/subscribers/:id/tags
 func (h *TagHandler) RemoveFromSubscriber(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	contactID, _ := strconv.Atoi(chi.URLParam(r, "id"))
 
 	var req struct {
@@ -172,6 +196,10 @@ func (h *TagHandler) RemoveFromSubscriber(w http.ResponseWriter, r *http.Request
 
 // GET /api/subscribers/:id/tags
 func (h *TagHandler) GetSubscriberTags(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	contactID, _ := strconv.Atoi(chi.URLParam(r, "id"))
 
 	var subscriberTags []models.SubscriberTag
@@ -212,6 +240,10 @@ type SegmentCondition struct {
 
 // GET /api/segments
 func (h *SegmentHandler) List(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	var segments []models.Segment
 	if err := h.Store.DB.Order("name").Find(&segments).Error; err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -223,6 +255,10 @@ func (h *SegmentHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/segments/:id
 func (h *SegmentHandler) Get(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
 
 	var segment models.Segment
@@ -236,7 +272,10 @@ func (h *SegmentHandler) Get(w http.ResponseWriter, r *http.Request) {
 		count := h.calculateSegmentCount(segment)
 		segment.CachedCount = count
 		segment.LastComputed = time.Now()
-		h.Store.DB.Save(&segment)
+		if err := h.Store.DB.Save(&segment).Error; err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update segment count"})
+			return
+		}
 	}
 
 	writeJSON(w, http.StatusOK, segment)
@@ -244,6 +283,10 @@ func (h *SegmentHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/segments
 func (h *SegmentHandler) Create(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	var segment models.Segment
 	if err := json.NewDecoder(r.Body).Decode(&segment); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -273,6 +316,10 @@ func (h *SegmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // PUT /api/segments/:id
 func (h *SegmentHandler) Update(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
 
 	var segment models.Segment
@@ -306,6 +353,10 @@ func (h *SegmentHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/segments/:id
 func (h *SegmentHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
 
 	if err := h.Store.DB.Delete(&models.Segment{}, id).Error; err != nil {
@@ -318,6 +369,10 @@ func (h *SegmentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/segments/:id/subscribers
 func (h *SegmentHandler) GetSubscribers(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
 
 	var segment models.Segment
@@ -346,6 +401,10 @@ func (h *SegmentHandler) GetSubscribers(w http.ResponseWriter, r *http.Request) 
 
 // POST /api/segments/:id/refresh
 func (h *SegmentHandler) Refresh(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
 
 	var segment models.Segment
@@ -356,7 +415,10 @@ func (h *SegmentHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 	segment.CachedCount = h.calculateSegmentCount(segment)
 	segment.LastComputed = time.Now()
-	h.Store.DB.Save(&segment)
+	if err := h.Store.DB.Save(&segment).Error; err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to refresh segment"})
+		return
+	}
 
 	writeJSON(w, http.StatusOK, segment)
 }

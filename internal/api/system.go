@@ -103,29 +103,29 @@ func (s *Server) handleGetDashboardStats(w http.ResponseWriter, r *http.Request)
 // GET /api/system/health
 func (s *Server) handleSystemHealth(w http.ResponseWriter, r *http.Request) {
 	health := map[string]interface{}{}
-	
+
 	// CPU
 	if data, err := os.ReadFile("/proc/loadavg"); err == nil {
 		parts := strings.Fields(string(data))
-		if len(parts) >= 1 { 
-			health["cpu_load_1m"], _ = strconv.ParseFloat(parts[0], 64) 
+		if len(parts) >= 1 {
+			health["cpu_load_1m"], _ = strconv.ParseFloat(parts[0], 64)
 		}
 	}
-	
+
 	// RAM
 	if data, err := os.ReadFile("/proc/meminfo"); err == nil {
 		lines := strings.Split(string(data), "\n")
 		mem := make(map[string]int64)
 		for _, line := range lines {
 			parts := strings.Fields(line)
-			if len(parts) >= 2 { 
-				mem[strings.TrimSuffix(parts[0], ":")], _ = strconv.ParseInt(parts[1], 10, 64) 
+			if len(parts) >= 2 {
+				mem[strings.TrimSuffix(parts[0], ":")], _ = strconv.ParseInt(parts[1], 10, 64)
 			}
 		}
 		health["ram_total_mb"] = mem["MemTotal"] / 1024
 		health["ram_available_mb"] = mem["MemAvailable"] / 1024
 	}
-	
+
 	// Disk
 	cmd := exec.Command("df", "-h", "/")
 	out, _ := cmd.Output()
@@ -142,7 +142,9 @@ func (s *Server) handleSystemServices(w http.ResponseWriter, r *http.Request) {
 		cmd := exec.Command("systemctl", "is-active", svc)
 		out, _ := cmd.Output()
 		status := strings.TrimSpace(string(out))
-		if status == "" { status = "unknown" }
+		if status == "" {
+			status = "unknown"
+		}
 		result[svc] = status
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -166,6 +168,10 @@ func (s *Server) handleSystemPorts(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/system/check-blacklist
 func (s *Server) handleCheckBlacklist(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	// Run in background, but FORCE a report to webhook (true)
 	go func() {
 		err := s.WS.CheckBlacklists(true)
@@ -178,12 +184,20 @@ func (s *Server) handleCheckBlacklist(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/system/check-security
 func (s *Server) handleCheckSecurity(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	go s.WS.RunSecurityAudit()
 	writeJSON(w, http.StatusOK, map[string]string{"status": "started", "message": "Security audit started. Report will be sent via webhook."})
 }
 
 // handleBlockIP blocks an IP address via firewall
 func (s *Server) handleBlockIP(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	var req struct {
 		IP string `json:"ip"`
 	}
@@ -232,7 +246,7 @@ func (s *Server) handleBlockIP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.WS.SendAuditLog("Security Block", "Blocked IP: "+ip, s.getUser(r))
-	
+
 	writeJSON(w, http.StatusOK, map[string]string{"status": "blocked", "ip": ip})
 }
 
@@ -242,8 +256,12 @@ func (s *Server) handleBlockIP(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/system/ai-analyze
 func (s *Server) handleAIAnalyze(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	var req struct {
-		Type string `json:"type"` 
+		Type string `json:"type"`
 	}
 	// Decode can fail if body is empty, default to "logs"
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Type == "" {
@@ -262,10 +280,10 @@ func (s *Server) handleAIAnalyze(w http.ResponseWriter, r *http.Request) {
 		cmd := exec.Command("df", "-h")
 		out, _ := cmd.Output()
 		context = "Disk Usage:\n" + string(out)
-		
+
 		loadData, _ := os.ReadFile("/proc/loadavg")
 		context += "\nLoad Avg: " + string(loadData)
-		
+
 		prompt = "Analyze this server health data and provide insights on resource usage. Be concise."
 
 	} else if req.Type == "bounces" {
@@ -300,7 +318,7 @@ func (s *Server) handleAIAnalyze(w http.ResponseWriter, r *http.Request) {
 func callAIAPI(provider, apiKey, prompt, context string) (string, error) {
 	url := "https://api.openai.com/v1/chat/completions"
 	model := "gpt-3.5-turbo"
-	
+
 	if provider == "deepseek" {
 		url = "https://api.deepseek.com/chat/completions"
 		model = "deepseek-chat"
@@ -341,7 +359,7 @@ func callAIAPI(provider, apiKey, prompt, context string) (string, error) {
 	if err := json.Unmarshal(body, &result); err != nil {
 		return "", err
 	}
-	
+
 	choices, _ := result["choices"].([]interface{})
 	if len(choices) > 0 {
 		if c, ok := choices[0].(map[string]interface{}); ok {

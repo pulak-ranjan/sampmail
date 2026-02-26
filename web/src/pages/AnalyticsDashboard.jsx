@@ -22,12 +22,12 @@ export default function AnalyticsDashboard() {
   const loadDashboard = async () => {
     try {
       setLoading(true);
-      const [dashRes, delivRes] = await Promise.all([
-        api.get(`/analytics/dashboard?days=${period}`),
-        api.get(`/analytics/deliverability?days=${period}`)
+      const [dashData, delivData] = await Promise.all([
+        api.get(`/v2/analytics/dashboard?days=${period}`),
+        api.get(`/v2/analytics/deliverability?days=${period}`)
       ]);
-      setData(dashRes.data);
-      setDeliverability(delivRes.data);
+      setData(dashData);
+      setDeliverability(delivData);
     } catch (err) {
       console.error('Failed to load analytics:', err);
     } finally {

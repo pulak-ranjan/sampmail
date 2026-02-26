@@ -7,12 +7,13 @@
     "dev": "bunx --bun vite",
     "build": "bunx --bun vite build",
     "preview": "bunx --bun vite preview",
-    "lint": "bunx eslint . --ext js,jsx,ts,tsx",
+    "lint": "bunx eslint .",
     "type-check": "bunx tsc --noEmit"
   },
   "dependencies": {
     "chart.js": "^4.5.1",
     "clsx": "^2.1.1",
+    "dompurify": "^3.3.1",
     "lucide-react": "^0.344.0",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.19",
+    "@types/dompurify": "^3.2.0",
     "@types/node": "^20.19.27",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^18.3.27",

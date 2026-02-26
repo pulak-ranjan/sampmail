@@ -130,17 +130,23 @@ func (h *TrackingHandlerV2) HandleClick(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Validate signature if present
+	// Validate URL scheme — must be http or https to prevent javascript:, data:, etc.
+	parsedTarget, err := url.Parse(decodedURL)
+	if err != nil || (parsedTarget.Scheme != "http" && parsedTarget.Scheme != "https") {
+		http.Error(w, "Invalid redirect target", http.StatusForbidden)
+		return
+	}
+
+	// Validate signature — required for all tracked links.
+	// On failure, return 403 rather than redirect to prevent open-redirect abuse.
 	if signature != "" {
 		cfg := config.Get()
 		if !h.verifyLinkSignature(uint(campaignID), uint(recipientID), decodedURL, signature, cfg.AppSecret) {
-			// Log potential replay attack
-			logger.WithComponent("tracking").Warn("invalid link signature",
+			logger.WithComponent("tracking").Warn("invalid link signature — redirect blocked",
 				"campaign_id", campaignID,
 				"recipient_id", recipientID,
 			)
-			// Still redirect but don't track (potential replay)
-			http.Redirect(w, r, decodedURL, http.StatusFound)
+			http.Error(w, "Invalid link signature", http.StatusForbidden)
 			return
 		}
 
@@ -150,10 +156,13 @@ func (h *TrackingHandlerV2) HandleClick(w http.ResponseWriter, r *http.Request) 
 			logger.WithComponent("tracking").Warn("expired tracking link",
 				"recipient_id", recipientID,
 			)
-			// Still redirect but don't track
-			http.Redirect(w, r, decodedURL, http.StatusFound)
+			http.Error(w, "Link has expired", http.StatusGone)
 			return
 		}
+	} else {
+		// No signature present — reject to prevent unauthenticated open redirects
+		http.Error(w, "Missing link signature", http.StatusForbidden)
+		return
 	}
 
 	// Redirect immediately (non-blocking)

@@ -10,6 +10,10 @@ import (
 
 // handleGetWebhookSettings returns current webhook configuration
 func (s *Server) handleGetWebhookSettings(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	settings, err := s.Store.GetSettings()
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -29,6 +33,10 @@ func (s *Server) handleGetWebhookSettings(w http.ResponseWriter, r *http.Request
 
 // handleSetWebhookSettings saves webhook configuration
 func (s *Server) handleSetWebhookSettings(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	var req struct {
 		WebhookURL     string  `json:"webhook_url"`
 		WebhookEnabled bool    `json:"webhook_enabled"`
@@ -70,6 +78,10 @@ func (s *Server) handleSetWebhookSettings(w http.ResponseWriter, r *http.Request
 
 // handleTestWebhook sends a test message to the webhook URL
 func (s *Server) handleTestWebhook(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	var req struct {
 		WebhookURL string `json:"webhook_url"`
 	}
@@ -99,6 +111,10 @@ func (s *Server) handleTestWebhook(w http.ResponseWriter, r *http.Request) {
 
 // handleGetWebhookLogs returns recent webhook logs
 func (s *Server) handleGetWebhookLogs(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	logs, err := s.Store.ListWebhookLogs(50)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to get logs"})
@@ -110,6 +126,10 @@ func (s *Server) handleGetWebhookLogs(w http.ResponseWriter, r *http.Request) {
 
 // handleCheckBounces triggers bounce rate check
 func (s *Server) handleCheckBounces(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	if err := s.WS.CheckBounceRates(); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to check bounces"})
 		return
@@ -123,6 +143,10 @@ func (s *Server) handleCheckBounces(w http.ResponseWriter, r *http.Request) {
 
 // handleListWebhooks returns webhooks as a list (for frontend compatibility)
 func (s *Server) handleListWebhooks(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	settings, err := s.Store.GetSettings()
 	if err != nil || settings.WebhookURL == "" {
 		writeJSON(w, http.StatusOK, []interface{}{})
@@ -143,6 +167,10 @@ func (s *Server) handleListWebhooks(w http.ResponseWriter, r *http.Request) {
 
 // handleCreateWebhook creates/updates the webhook URL
 func (s *Server) handleCreateWebhook(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	var req struct {
 		URL    string   `json:"url"`
 		Events []string `json:"events"`
@@ -186,6 +214,10 @@ func (s *Server) handleCreateWebhook(w http.ResponseWriter, r *http.Request) {
 
 // handleDeleteWebhook removes the webhook configuration
 func (s *Server) handleDeleteWebhook(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	settings, err := s.Store.GetSettings()
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
@@ -205,6 +237,10 @@ func (s *Server) handleDeleteWebhook(w http.ResponseWriter, r *http.Request) {
 
 // handleTestSingleWebhook tests a specific webhook by ID
 func (s *Server) handleTestSingleWebhook(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	settings, err := s.Store.GetSettings()
 	if err != nil || settings.WebhookURL == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no webhook configured"})

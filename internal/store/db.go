@@ -66,6 +66,25 @@ func NewStore(path string) (*Store, error) {
 		// Phase 3: Proxy and IP Management
 		&models.Proxy{},
 		&models.SendingIP{},
+		// V2 Multi-tenancy models
+		&models.Organization{},
+		&models.OrganizationUser{},
+		&models.ContactV2{},
+		&models.SubscriberList{},
+		&models.ListSubscriber{},
+		&models.EmailTemplate{},
+		&models.TemplateBlock{},
+		&models.CampaignV2{},
+		&models.CampaignRecipientV2{},
+		&models.AutomationActionLog{},
+		&models.APIKeyV2{},
+		&models.WebhookV2{},
+		&models.TagV2{},
+		&models.ContactTagV2{},
+		&models.SegmentV2{},
+		&models.SuppressionV2{},
+		// Per-tenant custom domain config (tracking + unsubscribe domains)
+		&models.OrganizationDomainConfig{},
 	); err != nil {
 		return nil, err
 	}
@@ -163,9 +182,13 @@ func (s *Store) UpsertSettings(st *models.AppSettings) error {
 // Domains
 // ----------------------
 
-func (s *Store) ListDomains() ([]models.Domain, error) {
+func (s *Store) ListDomains(orgID uint) ([]models.Domain, error) {
 	var domains []models.Domain
-	err := s.DB.Preload("Senders").Find(&domains).Error
+	q := s.DB.Preload("Senders")
+	if orgID > 0 {
+		q = q.Where("organization_id = ?", orgID)
+	}
+	err := q.Find(&domains).Error
 	return domains, err
 }
 
@@ -215,9 +238,13 @@ func (s *Store) CountDomains() (int64, error) {
 // Senders
 // ----------------------
 
-func (s *Store) ListSendersByDomain(domainID uint) ([]models.Sender, error) {
+func (s *Store) ListSendersByDomain(domainID uint, orgID uint) ([]models.Sender, error) {
 	var senders []models.Sender
-	err := s.DB.Where("domain_id = ?", domainID).Find(&senders).Error
+	q := s.DB.Where("domain_id = ?", domainID)
+	if orgID > 0 {
+		q = q.Where("organization_id = ?", orgID)
+	}
+	err := q.Find(&senders).Error
 	return senders, err
 }
 
@@ -467,44 +494,55 @@ func (s *Store) GetChatHistory(limit int) ([]models.ChatLog, error) {
 // ----------------------
 
 // AddSuppression adds an email to the suppression list
-func (s *Store) AddSuppression(email, reason, source string) error {
+func (s *Store) AddSuppression(orgID uint, email, reason, source string) error {
 	sup := models.Suppression{
-		Email:     strings.ToLower(strings.TrimSpace(email)),
-		Reason:    reason,
-		Source:    source,
-		CreatedAt: time.Now(),
+		OrganizationID: orgID,
+		Email:          strings.ToLower(strings.TrimSpace(email)),
+		Reason:         reason,
+		Source:         source,
+		CreatedAt:      time.Now(),
 	}
 	// Use ON CONFLICT to avoid duplicates
 	return s.DB.Clauses(clause.OnConflict{DoNothing: true}).Create(&sup).Error
 }
 
-// IsSuppressed checks if an email is on the suppression list
-func (s *Store) IsSuppressed(email string) (bool, error) {
+// IsSuppressed checks if an email is on the suppression list for the given org
+func (s *Store) IsSuppressed(orgID uint, email string) (bool, error) {
 	var count int64
-	err := s.DB.Model(&models.Suppression{}).
-		Where("email = ?", strings.ToLower(strings.TrimSpace(email))).
-		Count(&count).Error
+	q := s.DB.Model(&models.Suppression{}).
+		Where("email = ?", strings.ToLower(strings.TrimSpace(email)))
+	if orgID > 0 {
+		q = q.Where("organization_id = ?", orgID)
+	}
+	err := q.Count(&count).Error
 	return count > 0, err
 }
 
-// RemoveSuppression removes an email from suppression (for re-engagement)
-func (s *Store) RemoveSuppression(email string) error {
-	return s.DB.Where("email = ?", strings.ToLower(strings.TrimSpace(email))).
-		Delete(&models.Suppression{}).Error
+// RemoveSuppression removes an email from suppression for the given org
+func (s *Store) RemoveSuppression(orgID uint, email string) error {
+	q := s.DB.Where("email = ?", strings.ToLower(strings.TrimSpace(email)))
+	if orgID > 0 {
+		q = q.Where("organization_id = ?", orgID)
+	}
+	return q.Delete(&models.Suppression{}).Error
 }
 
-// ListSuppressions returns paginated suppression list
-func (s *Store) ListSuppressions(limit, offset int) ([]models.Suppression, int64, error) {
+// ListSuppressions returns paginated suppression list for an org
+func (s *Store) ListSuppressions(orgID uint, limit, offset int) ([]models.Suppression, int64, error) {
 	var sups []models.Suppression
 	var total int64
 
-	s.DB.Model(&models.Suppression{}).Count(&total)
-	err := s.DB.Order("created_at desc").Limit(limit).Offset(offset).Find(&sups).Error
+	q := s.DB.Model(&models.Suppression{})
+	if orgID > 0 {
+		q = q.Where("organization_id = ?", orgID)
+	}
+	q.Count(&total)
+	err := q.Order("created_at desc").Limit(limit).Offset(offset).Find(&sups).Error
 	return sups, total, err
 }
 
-// BulkCheckSuppressed returns a map of emails that are suppressed
-func (s *Store) BulkCheckSuppressed(emails []string) (map[string]bool, error) {
+// BulkCheckSuppressed returns a map of emails that are suppressed within an org
+func (s *Store) BulkCheckSuppressed(orgID uint, emails []string) (map[string]bool, error) {
 	result := make(map[string]bool)
 	if len(emails) == 0 {
 		return result, nil
@@ -516,8 +554,12 @@ func (s *Store) BulkCheckSuppressed(emails []string) (map[string]bool, error) {
 		normalized[i] = strings.ToLower(strings.TrimSpace(e))
 	}
 
+	q := s.DB.Where("email IN ?", normalized)
+	if orgID > 0 {
+		q = q.Where("organization_id = ?", orgID)
+	}
 	var found []models.Suppression
-	err := s.DB.Where("email IN ?", normalized).Find(&found).Error
+	err := q.Find(&found).Error
 	if err != nil {
 		return nil, err
 	}
@@ -553,4 +595,41 @@ func (s *Store) GetRecentBounces(hours int) ([]models.BounceEvent, error) {
 	err := s.DB.Where("processed_at >= ?", since).
 		Order("processed_at desc").Find(&events).Error
 	return events, err
+}
+
+// ----------------------
+// Organization Domain Config
+// ----------------------
+
+// GetOrgDomainConfig returns the tracking/unsubscribe domain config for an org
+func (s *Store) GetOrgDomainConfig(orgID uint) (*models.OrganizationDomainConfig, error) {
+	var cfg models.OrganizationDomainConfig
+	err := s.DB.Where("organization_id = ?", orgID).First(&cfg).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotFound
+	}
+	return &cfg, err
+}
+
+// UpsertOrgDomainConfig creates or updates the org domain config
+func (s *Store) UpsertOrgDomainConfig(cfg *models.OrganizationDomainConfig) error {
+	if cfg.ID == 0 {
+		return s.DB.Create(cfg).Error
+	}
+	return s.DB.Save(cfg).Error
+}
+
+// withOrgFilter returns a GORM scope that filters by organization_id when orgID > 0 (unexported).
+func withOrgFilter(orgID uint) func(*gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		if orgID > 0 {
+			return db.Where("organization_id = ?", orgID)
+		}
+		return db
+	}
+}
+
+// WithOrgFilterScope is the exported version for use in api/service packages.
+func WithOrgFilterScope(orgID uint) func(*gorm.DB) *gorm.DB {
+	return withOrgFilter(orgID)
 }

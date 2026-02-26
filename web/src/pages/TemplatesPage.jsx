@@ -17,7 +17,6 @@ export default function TemplatesPage() {
 
   useEffect(() => {
     loadTemplates();
-    loadCategories();
   }, [search, selectedCategory]);
 
   const loadTemplates = async () => {
@@ -26,21 +25,14 @@ export default function TemplatesPage() {
       if (search) params.append('search', search);
       if (selectedCategory) params.append('category', selectedCategory);
 
-      const res = await api.get(`/templates?${params}`);
-      setTemplates(res.data || []);
+      const data = await api.get(`/v2/templates?${params}`);
+      const next = data || [];
+      setTemplates(next);
+      setCategories(Array.from(new Set(next.map((t) => t.category).filter(Boolean))).sort());
     } catch (err) {
       console.error('Failed to load templates:', err);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadCategories = async () => {
-    try {
-      const res = await api.get('/templates/categories');
-      setCategories(res.data || []);
-    } catch (err) {
-      console.error('Failed to load categories:', err);
     }
   };
 
@@ -62,7 +54,18 @@ export default function TemplatesPage() {
 
   const handleClone = async (template) => {
     try {
-      await api.post(`/templates/${template.id}/clone`);
+      await api.post(`/v2/templates`, {
+        name: `${template.name} (Copy)`,
+        subject: template.subject || '',
+        preview_text: template.preview_text || '',
+        html_content: template.html_content || '',
+        text_content: template.text_content || '',
+        mjml_source: template.mjml_source || '',
+        builder_json: template.builder_json || '',
+        category: template.category || 'newsletter',
+        subcategory: template.subcategory || '',
+        thumbnail_url: template.thumbnail_url || ''
+      });
       loadTemplates();
     } catch (err) {
       console.error('Failed to clone template');
@@ -76,7 +79,7 @@ export default function TemplatesPage() {
   const confirmDelete = async () => {
     if (!deleteId) return;
     try {
-      await api.delete(`/templates/${deleteId}`);
+      await api.delete(`/v2/templates/${deleteId}`);
       loadTemplates();
     } catch (err) {
       console.error('Failed to delete template');
@@ -87,9 +90,9 @@ export default function TemplatesPage() {
   const handleSave = async (template) => {
     try {
       if (template.id) {
-        await api.put(`/templates/${template.id}`, template);
+        await api.put(`/v2/templates/${template.id}`, template);
       } else {
-        await api.post('/templates', template);
+        await api.post('/v2/templates', template);
       }
       setShowEditor(false);
       loadTemplates();
@@ -100,14 +103,18 @@ export default function TemplatesPage() {
 
   const handlePreview = async (template) => {
     try {
-      const res = await api.post(`/templates/${template.id}/preview`, {
-        first_name: 'John',
-        last_name: 'Doe',
-        email: 'john@example.com',
-        company_name: 'Acme Inc',
-        unsubscribe_url: '#'
+      const res = await api.post(`/v2/templates/preview`, {
+        html_content: template.html_content || '',
+        subject: template.subject || '',
+        data: {
+          first_name: 'John',
+          last_name: 'Doe',
+          email: 'john@example.com',
+          company_name: 'Acme Inc',
+          unsubscribe_url: '#'
+        }
       });
-      setPreviewHtml(res.data.html);
+      setPreviewHtml(res.html || '');
       setShowPreview(true);
     } catch (err) {
       console.error('Failed to preview template');

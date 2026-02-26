@@ -18,6 +18,10 @@ import (
 
 // GET /api/bounce
 func (s *Server) handleListBounce(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	accounts, err := s.Store.ListBounceAccounts()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list bounce accounts"})
@@ -44,6 +48,10 @@ func (s *Server) handleListBounce(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/bounce
 func (s *Server) handleCreateBounce(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	var req struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
@@ -75,6 +83,10 @@ func (s *Server) handleCreateBounce(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/bounce/{id}
 func (s *Server) handleDeleteBounce(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -119,6 +131,10 @@ func (s *Server) handleListIPs(w http.ResponseWriter, r *http.Request) {
 // POST /api/system/ips/configure
 // Executes 'ip addr add' on the server
 func (s *Server) handleConfigureIP(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	var req struct {
 		IP        string `json:"ip"`
 		Netmask   string `json:"netmask"`

@@ -8,8 +8,24 @@ import {
 } from 'lucide-react';
 
 const AutomationBuilder = ({ automation, onSave, onActivate, onPause }) => {
-  const [nodes, setNodes] = useState(automation?.nodes ? JSON.parse(automation.nodes) : []);
-  const [edges, setEdges] = useState(automation?.edges ? JSON.parse(automation.edges) : []);
+  const parseJSON = (input, fallback) => {
+    if (!input) return fallback;
+    if (typeof input !== 'string') return input;
+    try {
+      return JSON.parse(input);
+    } catch {
+      return fallback;
+    }
+  };
+
+  const [nodes, setNodes] = useState(() => {
+    const parsed = parseJSON(automation?.nodes, []);
+    return Array.isArray(parsed) ? parsed : [];
+  });
+  const [edges, setEdges] = useState(() => {
+    const parsed = parseJSON(automation?.edges, []);
+    return Array.isArray(parsed) ? parsed : [];
+  });
   const [selectedNode, setSelectedNode] = useState(null);
   const [showNodePalette, setShowNodePalette] = useState(true);
   const canvasRef = useRef(null);

@@ -268,18 +268,18 @@ export function updateWarmup(senderID, enabled, plan) {
 
 // --- API Keys ---
 export function listKeys() {
-  return apiRequest("/keys");
+  return apiRequest("/v2/keys");
 }
 
 export function createKey(name, scopes) {
-  return apiRequest("/keys", {
+  return apiRequest("/v2/keys", {
     method: "POST",
     body: { name, scopes }
   });
 }
 
 export function deleteKey(id) {
-  return apiRequest(`/keys/${id}`, { method: "DELETE" });
+  return apiRequest(`/v2/keys/${id}`, { method: "DELETE" });
 }
 
 // --- Proxies ---
@@ -495,6 +495,31 @@ export function getSystemServices() {
 
 export function getSystemPorts() {
   return apiRequest("/system/ports");
+}
+
+// --- Org Domain Config ---
+export function getOrgDomainConfig(orgId) {
+  return apiRequest(`/v2/organizations/${orgId}/domain-config`);
+}
+
+export function updateOrgDomainConfig(orgId, config) {
+  return apiRequest(`/v2/organizations/${orgId}/domain-config`, {
+    method: "PUT",
+    body: config
+  });
+}
+
+export function verifyTrackingDomain(orgId) {
+  return apiRequest(`/v2/organizations/${orgId}/domain-config/verify-tracking`, { method: "POST" });
+}
+
+export function verifyUnsubscribeDomain(orgId) {
+  return apiRequest(`/v2/organizations/${orgId}/domain-config/verify-unsubscribe`, { method: "POST" });
+}
+
+// --- Campaign Stats ---
+export function getCampaignStats() {
+  return apiRequest("/v2/campaigns/stats");
 }
 
 // --- Default Export (Axios-like wrapper for compatibility) ---

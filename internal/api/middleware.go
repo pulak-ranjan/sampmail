@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -124,25 +125,25 @@ func getOrganizationFromContext(ctx context.Context) *models.Organization {
 // Used for internal APIs that KumoMTA Lua calls
 func internalOnlyMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Check if request is from localhost
-		remoteIP := r.RemoteAddr
-
-		// Extract IP (may include port)
-		if colonIdx := strings.LastIndex(remoteIP, ":"); colonIdx != -1 {
-			remoteIP = remoteIP[:colonIdx]
+		if r.Header.Get("X-Forwarded-For") != "" || r.Header.Get("X-Real-IP") != "" {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "internal API only"})
+			return
 		}
 
-		// Allow localhost and loopback
-		allowed := []string{"127.0.0.1", "::1", "localhost", "[::1]"}
-		isAllowed := false
-		for _, ip := range allowed {
-			if remoteIP == ip || strings.HasPrefix(remoteIP, ip) {
-				isAllowed = true
-				break
-			}
+		host := r.RemoteAddr
+		if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+			host = h
+		}
+		host = strings.TrimPrefix(host, "[")
+		host = strings.TrimSuffix(host, "]")
+
+		if host == "localhost" {
+			next.ServeHTTP(w, r)
+			return
 		}
 
-		if !isAllowed {
+		parsedIP := net.ParseIP(host)
+		if parsedIP == nil || !parsedIP.IsLoopback() {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "internal API only"})
 			return
 		}

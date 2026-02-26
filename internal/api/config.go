@@ -23,6 +23,10 @@ type configApplyResponse struct {
 
 // GET /api/config/preview
 func (s *Server) handlePreviewConfig(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	snap, err := core.LoadSnapshot(s.Store)
 	if err != nil {
 		s.Store.LogError(err)
@@ -45,12 +49,22 @@ func (s *Server) handlePreviewConfig(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/config/apply
 // This will:
-//  - load snapshot
-//  - generate configs
-//  - write them to real Kumo paths
-//  - validate via kumod
-//  - restart kumomta if validation passes
+//   - load snapshot
+//   - generate configs
+//   - write them to real Kumo paths
+//   - validate via kumod
+//   - restart kumomta if validation passes
 func (s *Server) handleApplyConfig(w http.ResponseWriter, r *http.Request) {
+	admin := getAdminFromContext(r.Context())
+	if admin == nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "not authenticated"})
+		return
+	}
+	if !admin.IsSuperAdmin {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "superadmin access required"})
+		return
+	}
+
 	snap, err := core.LoadSnapshot(s.Store)
 	if err != nil {
 		s.Store.LogError(err)

@@ -24,6 +24,10 @@ type bounceDTO struct {
 
 // GET /api/bounces
 func (s *Server) handleListBounceAccounts(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	list, err := s.Store.ListBounceAccounts()
 	if err != nil {
 		s.Store.LogError(err)
@@ -48,6 +52,10 @@ func (s *Server) handleListBounceAccounts(w http.ResponseWriter, r *http.Request
 // POST /api/bounces
 // If dto.id == 0 => create; else update.
 func (s *Server) handleSaveBounceAccount(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	var dto bounceDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -151,6 +159,10 @@ func (s *Server) handleSaveBounceAccount(w http.ResponseWriter, r *http.Request)
 
 // DELETE /api/bounces/{bounceID}
 func (s *Server) handleDeleteBounceAccount(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	raw := chi.URLParam(r, "bounceID")
 	id, err := strconv.Atoi(raw)
 	if err != nil || id < 0 {
@@ -185,6 +197,10 @@ func (s *Server) handleDeleteBounceAccount(w http.ResponseWriter, r *http.Reques
 // POST /api/bounces/apply
 // Ensures all bounce accounts exist at OS level with Maildir, without changing passwords.
 func (s *Server) handleApplyBounceAccounts(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireSuperAdmin(w, r); !ok {
+		return
+	}
+
 	list, err := s.Store.ListBounceAccounts()
 	if err != nil {
 		s.Store.LogError(err)

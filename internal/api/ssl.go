@@ -86,6 +86,16 @@ func (h *SSLHandler) HandleGetSSLStatus(w http.ResponseWriter, r *http.Request) 
 
 // HandleInstallSSL installs a Let's Encrypt SSL certificate
 func (h *SSLHandler) HandleInstallSSL(w http.ResponseWriter, r *http.Request) {
+	admin := getAdminFromContext(r.Context())
+	if admin == nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "not authenticated"})
+		return
+	}
+	if !admin.IsSuperAdmin {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "superadmin access required"})
+		return
+	}
+
 	var req SSLInstallRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error": "Invalid request"}`, http.StatusBadRequest)
@@ -144,6 +154,16 @@ func (h *SSLHandler) HandleInstallSSL(w http.ResponseWriter, r *http.Request) {
 
 // HandleRenewSSL renews SSL certificates
 func (h *SSLHandler) HandleRenewSSL(w http.ResponseWriter, r *http.Request) {
+	admin := getAdminFromContext(r.Context())
+	if admin == nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "not authenticated"})
+		return
+	}
+	if !admin.IsSuperAdmin {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "superadmin access required"})
+		return
+	}
+
 	cmd := exec.Command("certbot", "renew", "--nginx")
 	output, err := cmd.CombinedOutput()
 	if err != nil {

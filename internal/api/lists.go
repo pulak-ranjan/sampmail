@@ -30,10 +30,31 @@ func NewListHandler(st *store.Store) *ListHandler {
 	return &ListHandler{store: st}
 }
 
+func (h *ListHandler) requireOrgContext(w http.ResponseWriter, r *http.Request) (*models.AdminUser, *models.Organization, bool) {
+	admin := getAdminFromContext(r.Context())
+	if admin == nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "not authenticated"})
+		return nil, nil, false
+	}
+
+	org := getOrganizationFromContext(r.Context())
+	if org == nil || org.ID == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "organization context required"})
+		return nil, nil, false
+	}
+
+	return admin, org, true
+}
+
 // ListLists returns all subscriber lists
 func (h *ListHandler) ListLists(w http.ResponseWriter, r *http.Request) {
+	_, org, ok := h.requireOrgContext(w, r)
+	if !ok {
+		return
+	}
+
 	var lists []models.SubscriberList
-	if err := h.store.DB.Order("created_at DESC").Find(&lists).Error; err != nil {
+	if err := h.store.DB.Where("organization_id = ?", org.ID).Order("created_at DESC").Find(&lists).Error; err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
@@ -42,10 +63,15 @@ func (h *ListHandler) ListLists(w http.ResponseWriter, r *http.Request) {
 
 // GetList returns a single list with statistics
 func (h *ListHandler) GetList(w http.ResponseWriter, r *http.Request) {
+	_, org, ok := h.requireOrgContext(w, r)
+	if !ok {
+		return
+	}
+
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
 
 	var list models.SubscriberList
-	if err := h.store.DB.First(&list, id).Error; err != nil {
+	if err := h.store.DB.Where("id = ? AND organization_id = ?", id, org.ID).First(&list).Error; err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "list not found"})
 		return
 	}
@@ -66,20 +92,44 @@ func (h *ListHandler) GetList(w http.ResponseWriter, r *http.Request) {
 
 // CreateList creates a new subscriber list
 func (h *ListHandler) CreateList(w http.ResponseWriter, r *http.Request) {
-	var list models.SubscriberList
-	if err := json.NewDecoder(r.Body).Decode(&list); err != nil {
+	admin, org, ok := h.requireOrgContext(w, r)
+	if !ok {
+		return
+	}
+
+	var req struct {
+		Name               string `json:"name"`
+		Description        string `json:"description"`
+		Type               string `json:"type"`
+		DoubleOptin        bool   `json:"double_optin"`
+		WelcomeEmailID     uint   `json:"welcome_email_id"`
+		UnsubscribeEmailID uint   `json:"unsubscribe_email_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 		return
 	}
 
-	if list.Name == "" {
+	if req.Name == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
 		return
 	}
 
-	list.Type = "static"
-	list.CreatedAt = time.Now()
-	list.UpdatedAt = time.Now()
+	list := models.SubscriberList{
+		OrganizationID:     org.ID,
+		Name:               req.Name,
+		Description:        req.Description,
+		Type:               req.Type,
+		DoubleOptin:        req.DoubleOptin,
+		WelcomeEmailID:     req.WelcomeEmailID,
+		UnsubscribeEmailID: req.UnsubscribeEmailID,
+		CreatedBy:          admin.ID,
+		CreatedAt:          time.Now(),
+		UpdatedAt:          time.Now(),
+	}
+	if list.Type == "" {
+		list.Type = "static"
+	}
 
 	if err := h.store.DB.Create(&list).Error; err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -91,21 +141,47 @@ func (h *ListHandler) CreateList(w http.ResponseWriter, r *http.Request) {
 
 // UpdateList updates a subscriber list
 func (h *ListHandler) UpdateList(w http.ResponseWriter, r *http.Request) {
+	_, org, ok := h.requireOrgContext(w, r)
+	if !ok {
+		return
+	}
+
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
 
 	var list models.SubscriberList
-	if err := h.store.DB.First(&list, id).Error; err != nil {
+	if err := h.store.DB.Where("id = ? AND organization_id = ?", id, org.ID).First(&list).Error; err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "list not found"})
 		return
 	}
 
-	var updates models.SubscriberList
-	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
+	var req struct {
+		Name               *string `json:"name"`
+		Description        *string `json:"description"`
+		DoubleOptin        *bool   `json:"double_optin"`
+		WelcomeEmailID     *uint   `json:"welcome_email_id"`
+		UnsubscribeEmailID *uint   `json:"unsubscribe_email_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 		return
 	}
 
-	updates.UpdatedAt = time.Now()
+	updates := map[string]interface{}{"updated_at": time.Now()}
+	if req.Name != nil {
+		updates["name"] = *req.Name
+	}
+	if req.Description != nil {
+		updates["description"] = *req.Description
+	}
+	if req.DoubleOptin != nil {
+		updates["double_optin"] = *req.DoubleOptin
+	}
+	if req.WelcomeEmailID != nil {
+		updates["welcome_email_id"] = *req.WelcomeEmailID
+	}
+	if req.UnsubscribeEmailID != nil {
+		updates["unsubscribe_email_id"] = *req.UnsubscribeEmailID
+	}
 
 	if err := h.store.DB.Model(&list).Updates(updates).Error; err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -117,12 +193,23 @@ func (h *ListHandler) UpdateList(w http.ResponseWriter, r *http.Request) {
 
 // DeleteList deletes a subscriber list
 func (h *ListHandler) DeleteList(w http.ResponseWriter, r *http.Request) {
+	_, org, ok := h.requireOrgContext(w, r)
+	if !ok {
+		return
+	}
+
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
+
+	var list models.SubscriberList
+	if err := h.store.DB.Where("id = ? AND organization_id = ?", id, org.ID).First(&list).Error; err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "list not found"})
+		return
+	}
 
 	// Delete subscribers first
 	h.store.DB.Where("list_id = ?", id).Delete(&models.ListSubscriber{})
 
-	if err := h.store.DB.Delete(&models.SubscriberList{}, id).Error; err != nil {
+	if err := h.store.DB.Delete(&list).Error; err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
@@ -136,11 +223,22 @@ func (h *ListHandler) DeleteList(w http.ResponseWriter, r *http.Request) {
 
 // ListSubscribers returns subscribers in a list
 func (h *ListHandler) ListSubscribers(w http.ResponseWriter, r *http.Request) {
+	_, org, ok := h.requireOrgContext(w, r)
+	if !ok {
+		return
+	}
+
 	listID, _ := strconv.Atoi(chi.URLParam(r, "id"))
 	status := r.URL.Query().Get("status")
 	search := r.URL.Query().Get("search")
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+
+	var list models.SubscriberList
+	if err := h.store.DB.Where("id = ? AND organization_id = ?", listID, org.ID).First(&list).Error; err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "list not found"})
+		return
+	}
 
 	if page < 1 {
 		page = 1
@@ -152,7 +250,7 @@ func (h *ListHandler) ListSubscribers(w http.ResponseWriter, r *http.Request) {
 	// Join with contacts to get full info
 	query := h.store.DB.Table("list_subscribers ls").
 		Select("ls.*, cv.email, cv.first_name, cv.last_name, cv.company, cv.lead_score").
-		Joins("LEFT JOIN contact_v2 cv ON ls.contact_id = cv.id").
+		Joins("LEFT JOIN contact_v2s cv ON ls.contact_id = cv.id").
 		Where("ls.list_id = ?", listID)
 
 	if status != "" {
@@ -187,6 +285,11 @@ func (h *ListHandler) ListSubscribers(w http.ResponseWriter, r *http.Request) {
 
 // AddSubscriber adds a subscriber to a list
 func (h *ListHandler) AddSubscriber(w http.ResponseWriter, r *http.Request) {
+	_, org, ok := h.requireOrgContext(w, r)
+	if !ok {
+		return
+	}
+
 	listID, _ := strconv.Atoi(chi.URLParam(r, "id"))
 
 	var req struct {
@@ -207,16 +310,23 @@ func (h *ListHandler) AddSubscriber(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var list models.SubscriberList
+	if err := h.store.DB.Where("id = ? AND organization_id = ?", listID, org.ID).First(&list).Error; err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "list not found"})
+		return
+	}
+
 	// Find or create contact
 	var contact models.ContactV2
-	if err := h.store.DB.Where("email = ?", req.Email).First(&contact).Error; err != nil {
+	if err := h.store.DB.Where("email = ? AND organization_id = ?", req.Email, org.ID).First(&contact).Error; err != nil {
 		// Create new contact
 		contact = models.ContactV2{
-			Email:        req.Email,
-			FirstName:    req.FirstName,
-			LastName:     req.LastName,
-			Status:       "active",
-			SubscribedAt: time.Now(),
+			OrganizationID: org.ID,
+			Email:          req.Email,
+			FirstName:      req.FirstName,
+			LastName:       req.LastName,
+			Status:         "active",
+			SubscribedAt:   time.Now(),
 		}
 		if req.Fields != nil {
 			contact.CustomFields = models.JSONMap(req.Fields)
@@ -260,9 +370,8 @@ func (h *ListHandler) AddSubscriber(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update list count
-	h.store.DB.Model(&models.SubscriberList{}).Where("id = ?", listID).
-		UpdateColumn("subscriber_count", h.store.DB.Raw("subscriber_count + 1"))
+	// Update list count atomically using proper SQL UPDATE
+	h.store.DB.Exec("UPDATE subscriber_lists SET subscriber_count = subscriber_count + 1 WHERE id = ?", listID)
 
 	// Trigger automation
 	core.TriggerAutomation("trigger_contact_added", contact.ID, map[string]interface{}{
@@ -275,8 +384,19 @@ func (h *ListHandler) AddSubscriber(w http.ResponseWriter, r *http.Request) {
 
 // RemoveSubscriber removes a subscriber from a list
 func (h *ListHandler) RemoveSubscriber(w http.ResponseWriter, r *http.Request) {
+	_, org, ok := h.requireOrgContext(w, r)
+	if !ok {
+		return
+	}
+
 	listID, _ := strconv.Atoi(chi.URLParam(r, "id"))
 	contactID, _ := strconv.Atoi(chi.URLParam(r, "contactId"))
+
+	var list models.SubscriberList
+	if err := h.store.DB.Where("id = ? AND organization_id = ?", listID, org.ID).First(&list).Error; err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "list not found"})
+		return
+	}
 
 	result := h.store.DB.Where("list_id = ? AND contact_id = ?", listID, contactID).
 		Delete(&models.ListSubscriber{})
@@ -286,17 +406,27 @@ func (h *ListHandler) RemoveSubscriber(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update list count
-	h.store.DB.Model(&models.SubscriberList{}).Where("id = ?", listID).
-		UpdateColumn("subscriber_count", h.store.DB.Raw("subscriber_count - 1"))
+	// Update list count atomically using proper SQL UPDATE
+	h.store.DB.Exec("UPDATE subscriber_lists SET subscriber_count = subscriber_count - 1 WHERE id = ?", listID)
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "removed"})
 }
 
 // UnsubscribeFromList unsubscribes a contact from a list
 func (h *ListHandler) UnsubscribeFromList(w http.ResponseWriter, r *http.Request) {
+	_, org, ok := h.requireOrgContext(w, r)
+	if !ok {
+		return
+	}
+
 	listID, _ := strconv.Atoi(chi.URLParam(r, "id"))
 	contactID, _ := strconv.Atoi(chi.URLParam(r, "contactId"))
+
+	var list models.SubscriberList
+	if err := h.store.DB.Where("id = ? AND organization_id = ?", listID, org.ID).First(&list).Error; err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "list not found"})
+		return
+	}
 
 	now := time.Now()
 	result := h.store.DB.Model(&models.ListSubscriber{}).
@@ -316,7 +446,18 @@ func (h *ListHandler) UnsubscribeFromList(w http.ResponseWriter, r *http.Request
 
 // ImportSubscribers imports subscribers from CSV with optional auto-verify
 func (h *ListHandler) ImportSubscribers(w http.ResponseWriter, r *http.Request) {
+	_, org, ok := h.requireOrgContext(w, r)
+	if !ok {
+		return
+	}
+
 	listID, _ := strconv.Atoi(chi.URLParam(r, "id"))
+
+	var list models.SubscriberList
+	if err := h.store.DB.Where("id = ? AND organization_id = ?", listID, org.ID).First(&list).Error; err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "list not found"})
+		return
+	}
 
 	// Parse multipart form
 	if err := r.ParseMultipartForm(32 << 20); err != nil { // 32MB max
@@ -402,14 +543,15 @@ func (h *ListHandler) ImportSubscribers(w http.ResponseWriter, r *http.Request) 
 
 		// Find or create contact
 		var contact models.ContactV2
-		if err := h.store.DB.Where("email = ?", email).First(&contact).Error; err != nil {
+		if err := h.store.DB.Where("email = ? AND organization_id = ?", email, org.ID).First(&contact).Error; err != nil {
 			contact = models.ContactV2{
-				Email:        email,
-				FirstName:    firstName,
-				LastName:     lastName,
-				Company:      company,
-				Status:       "active",
-				SubscribedAt: time.Now(),
+				OrganizationID: org.ID,
+				Email:          email,
+				FirstName:      firstName,
+				LastName:       lastName,
+				Company:        company,
+				Status:         "active",
+				SubscribedAt:   time.Now(),
 			}
 			h.store.DB.Create(&contact)
 
@@ -480,7 +622,7 @@ func (h *ListHandler) ImportSubscribers(w http.ResponseWriter, r *http.Request) 
 					}
 
 					h.store.DB.Model(&models.ContactV2{}).
-						Where("email = ?", result.Input).
+						Where("email = ? AND organization_id = ?", result.Input, org.ID).
 						Updates(map[string]interface{}{
 							"verification_status": status,
 							"verified_at":         time.Now(),
@@ -503,12 +645,23 @@ func (h *ListHandler) ImportSubscribers(w http.ResponseWriter, r *http.Request) 
 
 // ExportSubscribers exports subscribers as CSV
 func (h *ListHandler) ExportSubscribers(w http.ResponseWriter, r *http.Request) {
+	_, org, ok := h.requireOrgContext(w, r)
+	if !ok {
+		return
+	}
+
 	listID, _ := strconv.Atoi(chi.URLParam(r, "id"))
 	status := r.URL.Query().Get("status")
 
+	var list models.SubscriberList
+	if err := h.store.DB.Where("id = ? AND organization_id = ?", listID, org.ID).First(&list).Error; err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "list not found"})
+		return
+	}
+
 	query := h.store.DB.Table("list_subscribers ls").
 		Select("cv.email, cv.first_name, cv.last_name, cv.company, cv.phone, ls.status, ls.subscribed_at").
-		Joins("LEFT JOIN contact_v2 cv ON ls.contact_id = cv.id").
+		Joins("LEFT JOIN contact_v2s cv ON ls.contact_id = cv.id").
 		Where("ls.list_id = ?", listID)
 
 	if status != "" {
@@ -553,6 +706,11 @@ func (h *ListHandler) ExportSubscribers(w http.ResponseWriter, r *http.Request) 
 
 // CopySubscribers copies subscribers between lists
 func (h *ListHandler) CopySubscribers(w http.ResponseWriter, r *http.Request) {
+	_, org, ok := h.requireOrgContext(w, r)
+	if !ok {
+		return
+	}
+
 	sourceID, _ := strconv.Atoi(chi.URLParam(r, "id"))
 
 	var req struct {
@@ -562,6 +720,18 @@ func (h *ListHandler) CopySubscribers(w http.ResponseWriter, r *http.Request) {
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+
+	var sourceList models.SubscriberList
+	if err := h.store.DB.Where("id = ? AND organization_id = ?", sourceID, org.ID).First(&sourceList).Error; err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "source list not found"})
+		return
+	}
+
+	var targetList models.SubscriberList
+	if err := h.store.DB.Where("id = ? AND organization_id = ?", req.TargetListID, org.ID).First(&targetList).Error; err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "target list not found"})
 		return
 	}
 
@@ -611,7 +781,18 @@ func (h *ListHandler) CopySubscribers(w http.ResponseWriter, r *http.Request) {
 
 // GetListStats returns detailed list statistics
 func (h *ListHandler) GetListStats(w http.ResponseWriter, r *http.Request) {
+	_, org, ok := h.requireOrgContext(w, r)
+	if !ok {
+		return
+	}
+
 	listID, _ := strconv.Atoi(chi.URLParam(r, "id"))
+
+	var list models.SubscriberList
+	if err := h.store.DB.Where("id = ? AND organization_id = ?", listID, org.ID).First(&list).Error; err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "list not found"})
+		return
+	}
 
 	// Basic counts
 	var activeCount, unsubCount, bouncedCount, pendingCount int64
