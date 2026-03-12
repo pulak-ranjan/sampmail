@@ -38,7 +38,7 @@ import ServiceManagerPage from './pages/ServiceManagerPage';
 import EmailVerificationPage from './pages/EmailVerificationPage';
 import AdminDashboard from './pages/AdminDashboard';
 import UserDashboard from './pages/UserDashboard';
-import FinancePage from './pages/FinancePage';
+
 
 import TenantsPage from './pages/admin/TenantsPage';
 import UsersPage from './pages/admin/UsersPage';
@@ -116,7 +116,7 @@ export default function App() {
             <Route path="/ssl" element={<ProtectedRoute><SSLPage /></ProtectedRoute>} />
             <Route path="/services" element={<ProtectedRoute><ServiceManagerPage /></ProtectedRoute>} />
             <Route path="/verify" element={<ProtectedRoute><EmailVerificationPage /></ProtectedRoute>} />
-            <Route path="/finance" element={<ProtectedRoute><FinancePage /></ProtectedRoute>} />
+
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
