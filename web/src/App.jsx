@@ -12,6 +12,7 @@ import Domains from './pages/Domains';
 import DMARCPage from './pages/DMARCPage';
 import DKIMPage from './pages/DKIMPage';
 import BouncePage from './pages/BouncePage';
+import BouncesPage from './pages/BouncesPage';
 import IPsPage from './pages/IPsPage';
 import QueuePage from './pages/QueuePage';
 import WebhooksPage from './pages/WebhooksPage';

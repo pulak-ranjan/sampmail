@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { api } from '../api';
+import api from '../api';
 import { 
   AlertCircle, CheckCircle, XCircle, RefreshCw, Brain, 
   Mail, ArrowRight, Filter, ChevronDown, ChevronUp
