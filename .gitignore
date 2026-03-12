@@ -34,3 +34,6 @@ Thumbs.db
 
 # Claude Code
 .claude/
+
+# Local/experimental pages
+web/src/pages/FinancePage.jsx
