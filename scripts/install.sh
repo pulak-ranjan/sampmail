@@ -471,13 +471,13 @@ install_kumomta() {
 
     case $OS in
         ubuntu|debian)
-            # Add KumoMTA repository
             curl -fsSL https://openrepo.kumomta.com/files/kumomta-repo-setup.deb.sh | bash
             apt-get update
             apt-get install -y kumomta
             ;;
         centos|rhel|rocky|almalinux|fedora)
-            curl -fsSL https://openrepo.kumomta.com/files/kumomta-repo-setup.rpm.sh | bash
+            dnf -y install dnf-plugins-core
+            dnf config-manager --add-repo https://openrepo.kumomta.com/files/kumomta-rocky.repo
             yum install -y kumomta
             ;;
         *)
