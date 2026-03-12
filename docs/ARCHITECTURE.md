@@ -26,6 +26,67 @@ organized, how data flows through the system, and how each major subsystem works
 
 ---
 
+## System Architecture Overview
+
+```mermaid
+graph TB
+    subgraph "External Client Layer"
+        User((User/Admin))
+        Recipient((Email Recipient))
+    end
+
+    subgraph "Application Layer (SampMail Process)"
+        direction TB
+        subgraph "HTTP Server"
+            Router[Chi Router]
+            AuthM[Auth Middleware]
+            OrgM[Org Middleware]
+        end
+        
+        subgraph "Core Engines"
+            CampaignEngine[Campaign Pipeline]
+            AutomationEngine[Automation Engine]
+            BounceProcessor[Bounce Processor]
+        end
+        
+        SMTPPool[SMTP Connection Pool]
+    end
+
+    subgraph "Data & Cache Layer"
+        DB[(PostgreSQL/SQLite)]
+        Redis[(Redis)]
+    end
+
+    subgraph "Sending & Delivery Infrastructure"
+        MTA[KumoMTA Service]
+    end
+
+    subgraph "External Services"
+        AI[AI Providers: OpenAI etc.]
+        Verify[Reacher Verification]
+    end
+
+    %% Flow Relationships
+    User -->|HTTPS/REST| Router
+    Router --> AuthM --> OrgM --> CoreEngines
+    Recipient -->|Tracking Pixel/Link| Router
+    
+    CampaignEngine -->|Acquire Conn| SMTPPool
+    CampaignEngine -->|Read/Write| DB
+    AutomationEngine -->|Task State| DB
+    BounceProcessor -->|Parse Logs| MTA
+    BounceProcessor -->|Mark Suppressed| DB
+
+    SMTPPool -->|SMTP Submit| MTA
+    MTA -->|SMTP Deliver| Recipient
+    
+    CampaignEngine -.-> AI
+    CampaignEngine -.-> Verify
+    Router -.-> Redis
+```
+
+---
+
 ## Repository Layout
 
 ```

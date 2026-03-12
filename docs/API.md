@@ -34,6 +34,36 @@ http://localhost:9000
 - [System and Health](#system-and-health)
 - [Tracking Endpoints](#tracking-endpoints)
 - [Error Format](#error-format)
+ 
+---
+ 
+## API Architecture & Request Flow
+
+```mermaid
+graph TD
+    Client[API Client] -->|HTTP Request + Bearer Token| Auth{Authentication}
+    Auth -->|Unauthorized| 401[401 Unauthorized]
+    Auth -->|Authorized| Router[API Router / Scoped Middleware]
+    
+    subgraph "API Resource Groups"
+        Router --> AuthRes[Auth: login, me, sessions]
+        Router --> CoreRes[Core: campaigns, lists, templates]
+        Router --> AnalyticsRes[Analytics: dashboard, deliverability]
+        Router --> AdminRes[Admin: organizations, users]
+    end
+    
+    CoreRes --> Backend[Go Core Engine]
+    Backend --> DB[(PostgreSQL)]
+    Backend --> Redis[(Redis - Rate Limiting)]
+    
+    subgraph "External Delivery & AI"
+        Backend --> MTA[KumoMTA: SMTP Sending]
+        Backend --> AI[AI: Content Generation]
+        Backend --> Verify[Reacher: Verification]
+    end
+    
+    Backend --> JSON[JSON Response]
+```
 
 ---
 

@@ -44,35 +44,27 @@ Both can be installed by the install script or connected separately after the fa
 
 ## Quick Install
 
-The bundled shell script installs PostgreSQL, Docker (for Reacher), downloads the
-SampMail binary, creates a systemd service, and writes a fully configured
-`/etc/sampmail.env` with all secrets auto-generated. No manual secret generation or
-URL configuration is required.
+The bundled universal shell script installs PostgreSQL, Docker (for Reacher), KumoMTA, downloads the SampMail binary, creates a systemd service, and writes a fully configured `/etc/sampmail.env` with all secrets auto-generated.
 
-**Ubuntu or Debian:**
+### 🚀 Standard Installation
+Works on **Ubuntu (22.04+), Debian (12+), Rocky Linux (9+), AlmaLinux (9+), and RHEL 9**.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/pulak-ranjan/sampmail/main/scripts/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/pulak-ranjan/sampmail/main/scripts/install.sh | bash -s -- --with-kumomta
 ```
 
-**Rocky Linux, RHEL, or AlmaLinux:**
+### 🛠️ Custom Options
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/pulak-ranjan/sampmail/main/scripts/install.sh | sudo bash
-```
-
-**With KumoMTA installed at the same time:**
-
+**Override Base URL (Default is Auto-detected):**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/pulak-ranjan/sampmail/main/scripts/install.sh \
-  | sudo bash -s -- --with-kumomta
+  | bash -s -- --url https://mail.yourdomain.com --with-kumomta
 ```
 
-**With a custom domain specified upfront:**
-
+**Install without Reacher (Email Verification):**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/pulak-ranjan/sampmail/main/scripts/install.sh \
-  | sudo bash -s -- --url https://mail.yourdomain.com --with-kumomta
+  | bash -s -- --with-kumomta --no-reacher
 ```
 
 ### What the script does automatically

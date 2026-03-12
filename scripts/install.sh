@@ -195,11 +195,15 @@ configure_postgresql() {
     PG_PASSWORD=$(generate_password)
 
     # Create database and user
-    sudo -u postgres psql -c "DROP DATABASE IF EXISTS ${PG_DATABASE};" 2>/dev/null || true
-    sudo -u postgres psql -c "DROP USER IF EXISTS ${PG_USER};" 2>/dev/null || true
-    sudo -u postgres psql -c "CREATE USER ${PG_USER} WITH PASSWORD '${PG_PASSWORD}';"
-    sudo -u postgres psql -c "CREATE DATABASE ${PG_DATABASE} OWNER ${PG_USER};"
-    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE ${PG_DATABASE} TO ${PG_USER};"
+    # cd /tmp to avoid "Permission denied" warnings from sudo -u postgres
+    (
+        cd /tmp
+        sudo -u postgres psql -c "DROP DATABASE IF EXISTS ${PG_DATABASE};" 2>/dev/null || true
+        sudo -u postgres psql -c "DROP USER IF EXISTS ${PG_USER};" 2>/dev/null || true
+        sudo -u postgres psql -c "CREATE USER ${PG_USER} WITH PASSWORD '${PG_PASSWORD}';"
+        sudo -u postgres psql -c "CREATE DATABASE ${PG_DATABASE} OWNER ${PG_USER};"
+        sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE ${PG_DATABASE} TO ${PG_USER};"
+    )
 
     # Configure pg_hba.conf for local connections
     PG_HBA=$(sudo -u postgres psql -t -c "SHOW hba_file;" | xargs)
@@ -399,7 +403,17 @@ install_docker() {
     log_info "Installing Docker..."
 
     if ! command -v docker &> /dev/null; then
-        curl -fsSL https://get.docker.com | sh
+        case $OS in
+            centos|rhel|rocky|almalinux)
+                log_info "Using manual Docker installation for $OS..."
+                yum install -y yum-utils
+                yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+                yum install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+                ;;
+            *)
+                curl -fsSL https://get.docker.com | sh
+                ;;
+        esac
         systemctl enable docker
         systemctl start docker
         log_success "Docker installed"
