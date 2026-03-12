@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
 import {
   Save, Server, Globe, Network, Bot, Key, Loader2, CheckCircle,
-  Mail, Shield, ExternalLink, AlertCircle, Webhook, MessageSquare
+  Mail, Shield, ExternalLink, AlertCircle, Webhook, MessageSquare, Send
 } from "lucide-react";
-import { getSettings, saveSettings } from "../api";
+import { getSettings, saveSettings, getRuntimeConfig, saveRuntimeConfig, getBotConfig, saveBotConfig } from "../api";
 import { cn } from "../lib/utils";
 
 export default function Settings() {
@@ -42,6 +42,26 @@ export default function Settings() {
   const [activeSection, setActiveSection] = useState("mta");
   const [testingReacher, setTestingReacher] = useState(false);
 
+  // Runtime config for sending settings
+  const [runtimeConfig, setRuntimeConfig] = useState({
+    use_kumo_http_api: true,
+    campaign_workers: 50,
+    smtp_max_conns: 100,
+    use_reacher_only: false,
+    reacher_url: ""
+  });
+
+  // Bot config
+  const [botConfig, setBotConfig] = useState({
+    telegram_enabled: false,
+    telegram_bot_token: "",
+    telegram_chat_id: "",
+    discord_enabled: false,
+    discord_bot_token: "",
+    discord_app_id: "",
+    discord_public_key: ""
+  });
+
   useEffect(() => {
     (async () => {
       try {
@@ -52,6 +72,68 @@ export default function Settings() {
       }
     })();
   }, []);
+
+  // Load runtime config when switching to sending section
+  useEffect(() => {
+    if (activeSection === "sending") {
+      (async () => {
+        try {
+          const rc = await getRuntimeConfig();
+          setRuntimeConfig(rc);
+        } catch (err) {
+          console.error("Failed to load runtime config", err);
+        }
+      })();
+    }
+  }, [activeSection]);
+
+  // Load bot config when switching to bots section
+  useEffect(() => {
+    if (activeSection === "bots") {
+      (async () => {
+        try {
+          const bc = await getBotConfig();
+          setBotConfig(bc);
+        } catch (err) {
+          console.error("Failed to load bot config", err);
+        }
+      })();
+    }
+  }, [activeSection]);
+
+  const onRuntimeConfigChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setRuntimeConfig((f) => ({ ...f, [name]: type === "checkbox" ? checked : value }));
+  };
+
+  const saveRuntime = async () => {
+    setSaving(true);
+    setMsg({ text: "", type: "" });
+    try {
+      await saveRuntimeConfig(runtimeConfig);
+      setMsg({ text: "Sending config saved successfully!", type: "success" });
+    } catch (err) {
+      setMsg({ text: err.message || "Failed to save", type: "error" });
+    }
+    setSaving(false);
+  };
+
+  const onBotConfigChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setBotConfig((f) => ({ ...f, [name]: type === "checkbox" ? checked : value }));
+  };
+
+  const saveBotConfigHandler = async () => {
+    setSaving(true);
+    setMsg({ text: "", type: "" });
+    try {
+      await saveBotConfig(botConfig);
+      setMsg({ text: "Bot config saved successfully!", type: "success" });
+    } catch (err) {
+      setMsg({ text: err.message || "Failed to save", type: "error" });
+    }
+    setSaving(false);
+  };
 
   const onChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -107,6 +189,8 @@ export default function Settings() {
   const sections = [
     { id: "mta", label: "MTA / Server", icon: Server },
     { id: "reacher", label: "Email Verification", icon: Shield },
+    { id: "sending", label: "Sending", icon: Mail },
+    { id: "bots", label: "Bots", icon: Send },
     { id: "ai", label: "AI Integration", icon: Bot },
     { id: "webhooks", label: "Webhooks", icon: Webhook },
     { id: "whatsapp", label: "WhatsApp", icon: MessageSquare },
@@ -413,6 +497,211 @@ chmod +x /usr/local/bin/check_if_email_exists`}
                     {`docker run -p 8080:8080 reacherhq/backend:latest`}
                   </pre>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Sending Configuration Section */}
+          {activeSection === "sending" && (
+            <div className="bg-card border border-border rounded-xl p-6 space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <Mail className="w-5 h-5 text-blue-500" />
+                  Sending Configuration
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Configure how emails are sent via KumoMTA
+                </p>
+              </div>
+
+              <div className="grid gap-4">
+                <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
+                  <div>
+                    <label className="text-sm font-medium block">Use KumoMTA HTTP API</label>
+                    <p className="text-xs text-muted-foreground">
+                      Send via HTTP instead of SMTP (recommended for better queue control)
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    name="use_kumo_http_api"
+                    checked={runtimeConfig.use_kumo_http_api}
+                    onChange={onRuntimeConfigChange}
+                    className="w-5 h-5 rounded border-input"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Campaign Workers</label>
+                    <input
+                      type="number"
+                      name="campaign_workers"
+                      value={runtimeConfig.campaign_workers}
+                      onChange={onRuntimeConfigChange}
+                      className="w-full h-10 rounded-lg border bg-background px-3 text-sm"
+                      min={1}
+                      max={200}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Number of concurrent workers (default: 50)
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">SMTP Max Connections</label>
+                    <input
+                      type="number"
+                      name="smtp_max_conns"
+                      value={runtimeConfig.smtp_max_conns}
+                      onChange={onRuntimeConfigChange}
+                      className="w-full h-10 rounded-lg border bg-background px-3 text-sm"
+                      min={1}
+                      max={500}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Max SMTP connections (default: 100)
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
+                  <div>
+                    <label className="text-sm font-medium block">Use Reacher Only</label>
+                    <p className="text-xs text-muted-foreground">
+                      Skip local SMTP checks, use Reacher for all verifications
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    name="use_reacher_only"
+                    checked={runtimeConfig.use_reacher_only}
+                    onChange={onRuntimeConfigChange}
+                    className="w-5 h-5 rounded border-input"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Reacher URL</label>
+                  <input
+                    type="text"
+                    name="reacher_url"
+                    value={runtimeConfig.reacher_url}
+                    onChange={onRuntimeConfigChange}
+                    className="w-full h-10 rounded-lg border bg-background px-3 text-sm"
+                    placeholder="http://localhost:8080"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    HTTP URL for Reacher verification service
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={saveRuntime}
+                  disabled={saving}
+                  className="w-full flex items-center justify-center gap-2 h-10 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
+                >
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Save Sending Config
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Bots Section */}
+          {activeSection === "bots" && (
+            <div className="bg-card border border-border rounded-xl p-6 space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <Send className="w-5 h-5 text-blue-500" />
+                  Telegram & Discord Bots
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Configure bots to control SampMail from Telegram or Discord
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="border-t pt-4">
+                  <h4 className="font-medium mb-3">Telegram</h4>
+                  <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg mb-3">
+                    <div>
+                      <label className="text-sm font-medium block">Enable Telegram Bot</label>
+                      <p className="text-xs text-muted-foreground">Control SampMail from Telegram</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      name="telegram_enabled"
+                      checked={botConfig.telegram_enabled}
+                      onChange={onBotConfigChange}
+                      className="w-5 h-5 rounded"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      name="telegram_bot_token"
+                      value={botConfig.telegram_bot_token}
+                      onChange={onBotConfigChange}
+                      className="w-full h-10 rounded-lg border bg-background px-3 text-sm"
+                      placeholder="Bot Token from @BotFather"
+                    />
+                    <input
+                      type="text"
+                      name="telegram_chat_id"
+                      value={botConfig.telegram_chat_id}
+                      onChange={onBotConfigChange}
+                      className="w-full h-10 rounded-lg border bg-background px-3 text-sm"
+                      placeholder="Your Chat ID"
+                    />
+                  </div>
+                </div>
+
+                <div className="border-t pt-4">
+                  <h4 className="font-medium mb-3">Discord</h4>
+                  <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg mb-3">
+                    <div>
+                      <label className="text-sm font-medium block">Enable Discord Bot</label>
+                      <p className="text-xs text-muted-foreground">Control SampMail from Discord</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      name="discord_enabled"
+                      checked={botConfig.discord_enabled}
+                      onChange={onBotConfigChange}
+                      className="w-5 h-5 rounded"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      name="discord_bot_token"
+                      value={botConfig.discord_bot_token}
+                      onChange={onBotConfigChange}
+                      className="w-full h-10 rounded-lg border bg-background px-3 text-sm"
+                      placeholder="Bot Token from Discord Developer Portal"
+                    />
+                    <input
+                      type="text"
+                      name="discord_app_id"
+                      value={botConfig.discord_app_id}
+                      onChange={onBotConfigChange}
+                      className="w-full h-10 rounded-lg border bg-background px-3 text-sm"
+                      placeholder="Application ID"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={saveBotConfigHandler}
+                  disabled={saving}
+                  className="w-full flex items-center justify-center gap-2 h-10 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
+                >
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Save Bot Config
+                </button>
               </div>
             </div>
           )}

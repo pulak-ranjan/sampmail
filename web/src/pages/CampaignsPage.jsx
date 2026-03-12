@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import EmailTemplateBuilder from '../components/EmailTemplateBuilder';
-import { Mail, Rocket, Sparkles, Lightbulb, ArrowLeft, Plus, Send } from 'lucide-react';
+import { Mail, Rocket, Sparkles, Lightbulb, ArrowLeft, Plus, Send, Pause, Play, XCircle, AlertTriangle, CheckCircle, X } from 'lucide-react';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { getAuthHeaders, sendCampaign } from '../api';
 
@@ -12,6 +12,7 @@ const CampaignsPage = () => {
     const [deleteId, setDeleteId] = useState(null);
     const [sendConfirmCampaign, setSendConfirmCampaign] = useState(null);
     const [sending, setSending] = useState(false);
+    const [actionLoading, setActionLoading] = useState(null); // 'pause', 'resume', 'cancel'
 
     useEffect(() => {
         fetchCampaigns();
@@ -83,6 +84,49 @@ const CampaignsPage = () => {
         }
         setSending(false);
         setSendConfirmCampaign(null);
+    };
+
+    const handlePause = async (campaign) => {
+        setActionLoading(campaign.id);
+        try {
+            await fetch(`/api/campaigns/${campaign.id}/pause`, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+            });
+            fetchCampaigns();
+        } catch (error) {
+            console.error('Failed to pause campaign:', error);
+        }
+        setActionLoading(null);
+    };
+
+    const handleResume = async (campaign) => {
+        setActionLoading(campaign.id);
+        try {
+            await fetch(`/api/campaigns/${campaign.id}/resume`, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+            });
+            fetchCampaigns();
+        } catch (error) {
+            console.error('Failed to resume campaign:', error);
+        }
+        setActionLoading(null);
+    };
+
+    const handleCancel = async (campaign) => {
+        if (!window.confirm('Are you sure you want to cancel this campaign? This will stop sending immediately.')) return;
+        setActionLoading(campaign.id);
+        try {
+            await fetch(`/api/campaigns/${campaign.id}/cancel`, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+            });
+            fetchCampaigns();
+        } catch (error) {
+            console.error('Failed to cancel campaign:', error);
+        }
+        setActionLoading(null);
     };
 
     if (view === 'create') {
@@ -187,7 +231,45 @@ const CampaignsPage = () => {
                                                 <Send className="w-3 h-3" /> Send
                                             </button>
                                         )}
-                                        <button onClick={() => handleEdit(campaign)} className="text-blue-600 hover:text-blue-800 font-medium">Edit</button>
+                                        {campaign.status === 'sending' && (
+                                            <>
+                                                <button
+                                                    onClick={() => handlePause(campaign)}
+                                                    disabled={actionLoading === campaign.id}
+                                                    className="text-yellow-600 hover:text-yellow-800 font-medium inline-flex items-center gap-1 disabled:opacity-50"
+                                                >
+                                                    <Pause className="w-3 h-3" /> {actionLoading === campaign.id ? '...' : 'Pause'}
+                                                </button>
+                                                <button
+                                                    onClick={() => handleCancel(campaign)}
+                                                    disabled={actionLoading === campaign.id}
+                                                    className="text-red-600 hover:text-red-800 font-medium inline-flex items-center gap-1 disabled:opacity-50"
+                                                >
+                                                    <XCircle className="w-3 h-3" /> {actionLoading === campaign.id ? '...' : 'Cancel'}
+                                                </button>
+                                            </>
+                                        )}
+                                        {campaign.status === 'paused' && (
+                                            <>
+                                                <button
+                                                    onClick={() => handleResume(campaign)}
+                                                    disabled={actionLoading === campaign.id}
+                                                    className="text-green-600 hover:text-green-800 font-medium inline-flex items-center gap-1 disabled:opacity-50"
+                                                >
+                                                    <Play className="w-3 h-3" /> {actionLoading === campaign.id ? '...' : 'Resume'}
+                                                </button>
+                                                <button
+                                                    onClick={() => handleCancel(campaign)}
+                                                    disabled={actionLoading === campaign.id}
+                                                    className="text-red-600 hover:text-red-800 font-medium inline-flex items-center gap-1 disabled:opacity-50"
+                                                >
+                                                    <XCircle className="w-3 h-3" /> Cancel
+                                                </button>
+                                            </>
+                                        )}
+                                        {campaign.status !== 'sending' && campaign.status !== 'paused' && (
+                                            <button onClick={() => handleEdit(campaign)} className="text-blue-600 hover:text-blue-800 font-medium">Edit</button>
+                                        )}
                                         <button onClick={() => handleDeleteClick(campaign.id)} className="text-red-600 hover:text-red-800 font-medium">Delete</button>
                                     </td>
                                 </tr>
@@ -212,7 +294,17 @@ const CampaignsPage = () => {
                 onClose={() => setSendConfirmCampaign(null)}
                 onConfirm={confirmSend}
                 title="Send Campaign"
-                message={`Are you sure you want to send "${sendConfirmCampaign?.name}"? This will immediately start sending to all subscribers in the campaign's list.`}
+                message={
+                    <div>
+                        <p className="mb-4">Are you sure you want to send "{sendConfirmCampaign?.name}"? This will immediately start sending to all subscribers in the campaign's list.</p>
+                        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 flex gap-3 items-start">
+                            <AlertTriangle className="w-5 h-5 text-yellow-600 shrink-0" />
+                            <div className="text-sm text-yellow-800 dark:text-yellow-300">
+                                <strong>Tip:</strong> Make sure your list is verified! Go to <strong>Verify Emails</strong> to validate your subscriber list before sending to improve deliverability and reduce bounces.
+                            </div>
+                        </div>
+                    </div>
+                }
                 confirmText={sending ? "Sending..." : "Send Now"}
                 type="primary"
             />

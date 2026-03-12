@@ -28,7 +28,9 @@ func (h *AnalyticsHandlerV2) DashboardTenant(w http.ResponseWriter, r *http.Requ
 
 	days := 7
 	if d := r.URL.Query().Get("days"); d != "" {
-		days, _ = strconv.Atoi(d)
+			if parsed, err := strconv.Atoi(d); err == nil && parsed > 0 {
+			days = parsed
+		}
 	}
 
 	since := time.Now().AddDate(0, 0, -days)
@@ -203,7 +205,9 @@ func (h *AnalyticsHandlerV2) DeliverabilityTenant(w http.ResponseWriter, r *http
 
 	days := 7
 	if d := r.URL.Query().Get("days"); d != "" {
-		days, _ = strconv.Atoi(d)
+			if parsed, err := strconv.Atoi(d); err == nil && parsed > 0 {
+			days = parsed
+		}
 	}
 
 	since := time.Now().AddDate(0, 0, -days)
@@ -274,7 +278,9 @@ func (h *AnalyticsHandlerV2) DeliverabilityTenant(w http.ResponseWriter, r *http
 func (h *AnalyticsHandlerV2) Dashboard(w http.ResponseWriter, r *http.Request) {
 	days := 7
 	if d := r.URL.Query().Get("days"); d != "" {
-		days, _ = strconv.Atoi(d)
+			if parsed, err := strconv.Atoi(d); err == nil && parsed > 0 {
+			days = parsed
+		}
 	}
 
 	since := time.Now().AddDate(0, 0, -days)
@@ -407,7 +413,11 @@ func (h *AnalyticsHandlerV2) getDailyStats(days int) []map[string]interface{} {
 
 // GET /api/analytics/campaigns/:id
 func (h *AnalyticsHandlerV2) Campaign(w http.ResponseWriter, r *http.Request) {
-	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid campaign id"})
+		return
+	}
 
 	var campaign models.Campaign
 	if err := h.Store.DB.First(&campaign, id).Error; err != nil {
@@ -568,7 +578,9 @@ func (h *AnalyticsHandlerV2) getTopClickedLinks(campaignID int) []map[string]int
 func (h *AnalyticsHandlerV2) Domains(w http.ResponseWriter, r *http.Request) {
 	days := 30
 	if d := r.URL.Query().Get("days"); d != "" {
-		days, _ = strconv.Atoi(d)
+			if parsed, err := strconv.Atoi(d); err == nil && parsed > 0 {
+			days = parsed
+		}
 	}
 
 	// 1. Load all domains
@@ -744,7 +756,9 @@ func (h *AnalyticsHandlerV2) Domains(w http.ResponseWriter, r *http.Request) {
 func (h *AnalyticsHandlerV2) Deliverability(w http.ResponseWriter, r *http.Request) {
 	days := 7
 	if d := r.URL.Query().Get("days"); d != "" {
-		days, _ = strconv.Atoi(d)
+			if parsed, err := strconv.Atoi(d); err == nil && parsed > 0 {
+			days = parsed
+		}
 	}
 
 	since := time.Now().AddDate(0, 0, -days)

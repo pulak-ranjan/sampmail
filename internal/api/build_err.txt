@@ -1,0 +1,34 @@
+go : # github.com/pul
+ak-ranjan/sampmail/in
+ternal/api
+At line:1 char:1
++ go build . 2>&1 | 
+Out-File -Encoding 
+ASCII build_err.txt; 
+Get-Content ...
++ ~~~~~~~~~~~~~~~
+    + CategoryInfo   
+           : NotSpe  
+  cified: (# githu   
+ b.com/pu...il/in    
+ternal/api:Strin    
+g) [], RemoteExc    
+eption
+    + FullyQualified 
+   ErrorId : Native  
+  CommandError
+ 
+.\api_v2.go:1198:20: 
+cannot use r.Campaign
+Recipient.SentAt 
+(variable of struct 
+type "time".Time) as 
+*"time".Time value 
+in struct literal
+.\api_v2.go:1201:40: 
+r.CampaignRecipient.E
+rrorMessage 
+undefined (type model
+s.CampaignRecipient 
+has no field or 
+method ErrorMessage)

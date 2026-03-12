@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Users, Tag, Filter, Plus, Search, Upload, Download, Trash2, Edit, X, CheckCircle } from 'lucide-react';
 import api from '../api';
 import ConfirmationModal from '../components/ConfirmationModal';
@@ -48,10 +48,7 @@ function SubscribersTab() {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState([]);
 
-  useEffect(() => { loadLists(); }, []);
-  useEffect(() => { loadSubscribers(); }, [selectedListId, search]);
-
-  const loadLists = async () => {
+  const loadLists = useCallback(async () => {
     try {
       const data = await api.get('/v2/lists');
       const nextLists = data || [];
@@ -61,9 +58,9 @@ function SubscribersTab() {
       }
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
-  };
+  }, [selectedListId]);
 
-  const loadSubscribers = async () => {
+  const loadSubscribers = useCallback(async () => {
     if (!selectedListId) return;
     try {
       setLoading(true);
@@ -80,7 +77,10 @@ function SubscribersTab() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedListId, search]);
+
+  useEffect(() => { loadLists(); }, [loadLists]);
+  useEffect(() => { loadSubscribers(); }, [selectedListId, search, loadSubscribers]);
 
   return (
     <div className="space-y-4">

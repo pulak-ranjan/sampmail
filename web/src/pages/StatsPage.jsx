@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Line, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement,
@@ -26,23 +26,17 @@ export default function StatsPage() {
   const [loading, setLoading] = useState(true);
 
   const token = localStorage.getItem('sampmail_token');
-  const headers = { Authorization: `Bearer ${token}` };
+  const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
 
-  useEffect(() => {
-    fetchDomains();
-    fetchStats();
-    fetchSummary();
-  }, [days]);
-
-  const fetchDomains = async () => {
+  const fetchDomains = useCallback(async () => {
     try {
       const res = await fetch('/api/domains', { headers });
       const data = await res.json();
       setDomainList(Array.isArray(data) ? data : []);
     } catch (e) { console.error(e); }
-  };
+  }, [headers]);
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/stats/domains?days=${days}`, { headers });
@@ -51,14 +45,20 @@ export default function StatsPage() {
       setStats(data || {});
     } catch (e) { console.error(e); }
     setLoading(false);
-  };
+  }, [days, headers]);
 
-  const fetchSummary = async () => {
+  const fetchSummary = useCallback(async () => {
     try {
       const res = await fetch('/api/stats/summary', { headers });
       if (res.ok) setSummary(await res.json());
     } catch (e) { console.error(e); }
-  };
+  }, [headers]);
+
+  useEffect(() => {
+    fetchDomains();
+    fetchStats();
+    fetchSummary();
+  }, [days, fetchDomains, fetchStats, fetchSummary]);
 
   const refreshStats = async () => {
     await fetch('/api/stats/refresh', { method: 'POST', headers });

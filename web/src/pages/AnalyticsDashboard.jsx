@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell
@@ -15,11 +15,7 @@ export default function AnalyticsDashboard() {
   const [period, setPeriod] = useState(7);
   const [deliverability, setDeliverability] = useState(null);
 
-  useEffect(() => {
-    loadDashboard();
-  }, [period]);
-
-  const loadDashboard = async () => {
+  const loadDashboard = useCallback(async () => {
     try {
       setLoading(true);
       const [dashData, delivData] = await Promise.all([
@@ -33,7 +29,11 @@ export default function AnalyticsDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [period]);
+
+  useEffect(() => {
+    loadDashboard();
+  }, [period, loadDashboard]);
 
   if (loading) {
     return (
@@ -87,7 +87,7 @@ export default function AnalyticsDashboard() {
                 />
                 <circle
                   className={`${data.deliverability_score >= 80 ? 'text-green-500' :
-                      data.deliverability_score >= 60 ? 'text-yellow-500' : 'text-red-500'
+                    data.deliverability_score >= 60 ? 'text-yellow-500' : 'text-red-500'
                     }`}
                   strokeWidth="10"
                   strokeDasharray={`${data.deliverability_score * 2.51} 251`}
@@ -117,8 +117,8 @@ export default function AnalyticsDashboard() {
           {deliverability?.health && (
             <div className="space-y-4">
               <div className={`flex items-center gap-3 p-4 rounded-lg ${deliverability.health.status === 'good' ? 'bg-green-50 text-green-700' :
-                  deliverability.health.status === 'warning' ? 'bg-yellow-50 text-yellow-700' :
-                    'bg-red-50 text-red-700'
+                deliverability.health.status === 'warning' ? 'bg-yellow-50 text-yellow-700' :
+                  'bg-red-50 text-red-700'
                 }`}>
                 {deliverability.health.status === 'good' ? (
                   <CheckCircle size={24} />
@@ -332,9 +332,9 @@ export default function AnalyticsDashboard() {
                     </td>
                     <td className="py-3">
                       <span className={`px-2 py-1 text-xs rounded-full ${campaign.status === 'sent' ? 'bg-green-100 text-green-700' :
-                          campaign.status === 'sending' ? 'bg-blue-100 text-blue-700' :
-                            campaign.status === 'scheduled' ? 'bg-yellow-100 text-yellow-700' :
-                              'bg-gray-100 text-gray-700'
+                        campaign.status === 'sending' ? 'bg-blue-100 text-blue-700' :
+                          campaign.status === 'scheduled' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-gray-100 text-gray-700'
                         }`}>
                         {campaign.status}
                       </span>

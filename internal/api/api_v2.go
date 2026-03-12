@@ -1082,6 +1082,149 @@ func (h *CampaignHandlerV2) DeleteCampaign(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
+// CampaignRecipientWithBounce represents a recipient with bounce analysis
+type CampaignRecipientWithBounce struct {
+	ID           uint       `json:"id"`
+	Email        string     `json:"email"`
+	Status       string     `json:"status"`
+	SentAt       *time.Time `json:"sent_at"`
+	OpenedAt     *time.Time `json:"opened_at"`
+	ClickedAt    *time.Time `json:"clicked_at"`
+	ErrorMessage string     `json:"error_message,omitempty"`
+	// Bounce info
+	BounceType     string `json:"bounce_type,omitempty"`
+	BounceCode     string `json:"bounce_code,omitempty"`
+	DiagnosticCode string `json:"diagnostic_code,omitempty"`
+	// AI Analysis
+	AICategory     string `json:"ai_category,omitempty"`
+	AISeverity     string `json:"ai_severity,omitempty"`
+	AIExplanation  string `json:"ai_explanation,omitempty"`
+	AIAction       string `json:"ai_action,omitempty"`
+	AIIsRetryable  bool   `json:"ai_is_retryable"`
+	AIEmailQuality string `json:"ai_email_quality,omitempty"`
+}
+
+// GetCampaignRecipients returns recipients for a campaign with bounce info
+func (h *CampaignHandlerV2) GetCampaignRecipients(w http.ResponseWriter, r *http.Request) {
+	admin := getAdminFromContext(r.Context())
+	org := getOrganizationFromContext(r.Context())
+
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil || id <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid campaign id"})
+		return
+	}
+
+	// Verify campaign exists and user has access
+	var campaign models.CampaignV2
+	query := h.store.DB.Model(&models.CampaignV2{}).Where("id = ?", id)
+	if admin != nil && !admin.IsSuperAdmin {
+		if org == nil || org.ID == 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "organization context required"})
+			return
+		}
+		query = query.Where("organization_id = ?", org.ID)
+	} else if org != nil && org.ID > 0 {
+		query = query.Where("organization_id = ?", org.ID)
+	}
+
+	if err := query.First(&campaign).Error; err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "campaign not found"})
+		return
+	}
+
+	// Get query params for filtering
+	status := r.URL.Query().Get("status")
+	limit := 50
+	offset := 0
+
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
+			limit = parsed
+		}
+	}
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+
+	// Get recipients with LEFT JOIN to bounce_events
+	type result struct {
+		models.CampaignRecipient
+		BounceType     string
+		BounceCode     string
+		DiagnosticCode string
+		AICategory     string
+		AISeverity     string
+		AIExplanation  string
+		AIAction       string
+		AIIsRetryable  bool
+		AIEmailQuality string
+	}
+
+	var results []result
+
+	recipientsQuery := h.store.DB.Table("campaign_recipients").
+		Select("campaign_recipients.*, bounce_events.bounce_type, bounce_events.bounce_code, bounce_events.diagnostic_code, bounce_events.ai_category, bounce_events.ai_severity, bounce_events.ai_explanation, bounce_events.ai_action, bounce_events.ai_is_retryable, bounce_events.ai_email_quality").
+		Joins("LEFT JOIN bounce_events ON bounce_events.email = campaign_recipients.email AND bounce_events.campaign_id = campaign_recipients.campaign_id").
+		Where("campaign_recipients.campaign_id = ?", id)
+
+	if status != "" {
+		recipientsQuery = recipientsQuery.Where("campaign_recipients.status = ?", status)
+	}
+
+	// Get total count
+	var total int64
+	recipientsQuery.Count(&total)
+
+	// Get paginated results
+	if err := recipientsQuery.
+		Order("campaign_recipients.id DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&results).Error; err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	// Transform results
+	recipients := make([]CampaignRecipientWithBounce, len(results))
+	for i, r := range results {
+		var sentAtPtr *time.Time
+		if !r.CampaignRecipient.SentAt.IsZero() {
+			t := r.CampaignRecipient.SentAt
+			sentAtPtr = &t
+		}
+
+		recipients[i] = CampaignRecipientWithBounce{
+			ID:             r.CampaignRecipient.ID,
+			Email:          r.CampaignRecipient.Email,
+			Status:         r.CampaignRecipient.Status,
+			SentAt:         sentAtPtr,
+			OpenedAt:       r.CampaignRecipient.OpenedAt,
+			ClickedAt:      r.CampaignRecipient.ClickedAt,
+			ErrorMessage:   r.CampaignRecipient.Error,
+			BounceType:     r.BounceType,
+			BounceCode:     r.BounceCode,
+			DiagnosticCode: r.DiagnosticCode,
+			AICategory:     r.AICategory,
+			AISeverity:     r.AISeverity,
+			AIExplanation:  r.AIExplanation,
+			AIAction:       r.AIAction,
+			AIIsRetryable:  r.AIIsRetryable,
+			AIEmailQuality: r.AIEmailQuality,
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"recipients": recipients,
+		"total":      total,
+		"limit":      limit,
+		"offset":     offset,
+	})
+}
+
 // GetCampaignStats returns aggregate campaign stats
 func (h *CampaignHandlerV2) GetCampaignStats(w http.ResponseWriter, r *http.Request) {
 	admin := getAdminFromContext(r.Context())

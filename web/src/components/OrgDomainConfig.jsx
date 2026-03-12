@@ -27,9 +27,10 @@ export default function OrgDomainConfig({ orgId }) {
   useEffect(() => {
     if (!orgId) return;
     getOrgDomainConfig(orgId)
-      .then(data => setConfig(data || config))
+      .then(data => setConfig(c => data || c))
       .catch(err => console.error('Failed to load domain config:', err))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId]);
 
   const showMessage = (msg, type = 'success') => {

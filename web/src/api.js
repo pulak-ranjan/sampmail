@@ -139,6 +139,24 @@ export function saveSettings(payload) {
   return apiRequest("/settings", { method: "POST", body: payload });
 }
 
+// Runtime Config
+export function getRuntimeConfig() {
+  return apiRequest("/config/runtime");
+}
+
+export function saveRuntimeConfig(payload) {
+  return apiRequest("/config/runtime", { method: "POST", body: payload });
+}
+
+// Bot Config
+export function getBotConfig() {
+  return apiRequest("/config/bot");
+}
+
+export function saveBotConfig(payload) {
+  return apiRequest("/config/bot", { method: "POST", body: payload });
+}
+
 // Domains & senders
 export function listDomains() {
   return apiRequest("/domains");

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import QRCode from 'qrcode';
 import {
   Shield,
@@ -26,24 +26,24 @@ export default function SecurityPage() {
   const [loading, setLoading] = useState(false);
 
   const token = localStorage.getItem('sampmail_token');
-  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
 
-  useEffect(() => { fetchUser(); fetchSessions(); }, []);
-
-  const fetchUser = async () => {
+  const fetchUser = useCallback(async () => {
     try {
       const res = await fetch('/api/auth/me', { headers });
       if (res.status === 401) { window.location.href = '/login'; return; }
       setUser(await res.json());
     } catch (e) { console.error(e); }
-  };
+  }, [headers]);
 
-  const fetchSessions = async () => {
+  const fetchSessions = useCallback(async () => {
     try {
       const res = await fetch('/api/auth/sessions', { headers });
       if (res.ok) setSessions(await res.json() || []);
     } catch (e) { console.error(e); }
-  };
+  }, [headers]);
+
+  useEffect(() => { fetchUser(); fetchSessions(); }, [fetchUser, fetchSessions]);
 
   const startSetup2FA = async (e) => {
     e.preventDefault();

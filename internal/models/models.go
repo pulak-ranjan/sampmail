@@ -46,6 +46,23 @@ type AppSettings struct {
 	WhatsAppPhoneNumberID string `json:"whatsapp_phone_number_id"`
 	WhatsAppAccessToken   string `json:"whatsapp_access_token"` // Should be encrypted
 	WhatsAppVerifyToken   string `json:"whatsapp_verify_token"`
+
+	// Runtime Configuration (stored in DB, overrides env vars)
+	UseKumoHTTPAPI  bool `json:"use_kumo_http_api"`
+	CampaignWorkers int  `json:"campaign_workers"`
+	SMTPMaxConns    int  `json:"smtp_max_conns"`
+
+	// Telegram Bot Configuration
+	TelegramBotToken string `json:"telegram_bot_token"`
+	TelegramChatID  string `json:"telegram_chat_id"`
+	TelegramEnabled bool   `json:"telegram_enabled"`
+
+	// Discord Bot Configuration
+	DiscordBotToken    string `json:"discord_bot_token"`
+	DiscordAppID      string `json:"discord_app_id"`
+	DiscordPublicKey   string `json:"discord_public_key"`
+	DiscordGuildID    string `json:"discord_guild_id"`
+	DiscordEnabled   bool   `json:"discord_enabled"`
 }
 
 // A domain managed by the system
@@ -106,7 +123,7 @@ type Sender struct {
 	ID             uint   `gorm:"primaryKey" json:"id"`
 	OrganizationID uint   `gorm:"index" json:"organization_id"`
 	DomainID       uint   `gorm:"index" json:"domain_id"`
-	Domain   Domain `json:"-" gorm:"foreignKey:DomainID"` // Relation for Warmup Logic
+	Domain         Domain `json:"-" gorm:"foreignKey:DomainID"` // Relation for Warmup Logic
 
 	LocalPart    string `json:"local_part"`
 	Email        string `json:"email"`
@@ -250,10 +267,37 @@ type APIKey struct {
 
 // ChatLog stores AI conversation history (NEW)
 type ChatLog struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	Role      string    `json:"role"` // "user", "assistant"
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	ConversationID string    `json:"conversation_id"` // Groups messages by conversation (user/platform specific)
+	Role           string    `json:"role"`            // "user", "assistant"
+	Content        string    `json:"content"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+// ActionLog stores Anike agent action logs (immutable - cannot be deleted by bot)
+type ActionLog struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	Actor       string    `json:"actor"`        // "Anike" or "user:<username>"
+	Action      string    `json:"action"`        // action name
+	Parameters  string    `json:"parameters"`    // JSON string
+	Result      string    `json:"result"`        // result summary
+	Status      string    `json:"status"`       // "success", "failed", "blocked"
+	Timestamp   time.Time `json:"timestamp"`
+	IPAddress   string    `json:"ip_address,omitempty"`
+}
+
+// AIUsage tracks AI API usage for analytics
+type AIUsage struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	Provider       string    `json:"provider"`        // "openai", "anthropic", "gemini", etc.
+	Model          string    `json:"model"`           // model used
+	PromptTokens   int       `json:"prompt_tokens"`   // tokens in request
+	CompletionTokens int     `json:"completion_tokens"` // tokens in response
+	TotalTokens    int       `json:"total_tokens"`    // total tokens used
+	CostUSD        float64   `json:"cost_usd"`        // cost in USD
+	Platform       string    `json:"platform"`        // "web", "telegram", "discord"
+	ConversationID string    `json:"conversation_id"` // conversation reference
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 // ContactList represents a managed list of contacts
@@ -290,10 +334,10 @@ type Campaign struct {
 	ID             uint   `gorm:"primaryKey" json:"id"`
 	OrganizationID uint   `gorm:"index" json:"organization_id"`
 	Name           string `json:"name"`
-	Subject  string `json:"subject"`
-	Body     string `json:"body"`      // HTML Content
-	SenderID uint   `json:"sender_id"` // From which Sender identity
-	Sender   Sender `json:"-" gorm:"foreignKey:SenderID"`
+	Subject        string `json:"subject"`
+	Body           string `json:"body"`      // HTML Content
+	SenderID       uint   `json:"sender_id"` // From which Sender identity
+	Sender         Sender `json:"-" gorm:"foreignKey:SenderID"`
 
 	Status      string     `json:"status"`       // "draft", "scheduled", "sending", "completed", "failed"
 	ScheduledAt *time.Time `json:"scheduled_at"` // Nullable
@@ -365,6 +409,16 @@ type BounceEvent struct {
 	CampaignID     uint      `gorm:"index" json:"campaign_id"`
 	ProcessedAt    time.Time `json:"processed_at"`
 	RawMessage     string    `json:"raw_message"` // Original bounce message (truncated)
+
+	// AI Analysis Fields (Ollama)
+	AICategory        string     `json:"ai_category"`          // "mailbox_issue", "policy_violation", etc.
+	AISeverity        string     `json:"ai_severity"`          // "critical", "warning", "info"
+	AIExplanation     string     `json:"ai_explanation"`       // Human-readable explanation
+	AIAction          string     `json:"ai_action"`            // Suggested action
+	AIIsRetryable     bool       `json:"ai_is_retryable"`      // Can we retry?
+	AIIsPermanentFail bool       `json:"ai_is_permanent_fail"` // Permanent failure?
+	AIEmailQuality    string     `json:"ai_email_quality"`     // "valid", "risky", "invalid"
+	AIAnalyzedAt      *time.Time `json:"ai_analyzed_at"`       // When AI analysis was done
 }
 
 // ComplaintLog represents a spam complaint from FBL

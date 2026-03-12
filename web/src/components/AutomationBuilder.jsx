@@ -1,13 +1,30 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   UserPlus, Tag, Mail, Link, FileText, Globe, Calendar,
   Send, MessageSquare, Plus, Minus, List, Edit2, Zap, Star, Bell,
-  Clock, GitBranch, Scale, Target, LogOut,
+  Clock, GitBranch, Scale, Target, LogOut, ArrowRight,
   ChevronLeft, ChevronRight, Play, Pause, Save,
-  MousePointer2, ZoomIn, ZoomOut, X
+  MousePointer2, ZoomIn, ZoomOut, X, Grid3X3, Undo, Redo, Trash2,
+  Copy, Check, Info, AlertCircle
 } from 'lucide-react';
 
+// Enhanced node colors for n8n-style
+const nodeColors = {
+  trigger: { bg: 'bg-gradient-to-br from-emerald-500 to-emerald-600', ring: 'ring-emerald-400', dot: 'bg-emerald-300' },
+  action: { bg: 'bg-gradient-to-br from-blue-500 to-blue-600', ring: 'ring-blue-400', dot: 'bg-blue-300' },
+  condition: { bg: 'bg-gradient-to-br from-amber-500 to-orange-600', ring: 'ring-amber-400', dot: 'bg-amber-300' },
+  delay: { bg: 'bg-gradient-to-br from-violet-500 to-purple-600', ring: 'ring-violet-400', dot: 'bg-violet-300' },
+  goal: { bg: 'bg-gradient-to-br from-rose-500 to-pink-600', ring: 'ring-rose-400', dot: 'bg-rose-300' },
+};
+
 const AutomationBuilder = ({ automation, onSave, onActivate, onPause }) => {
+  // History for undo/redo
+  const [history, setHistory] = useState({ past: [], future: [] });
+  const [showMinimap, setShowMinimap] = useState(true);
+  const [showGrid, setShowGrid] = useState(true);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+
   const parseJSON = (input, fallback) => {
     if (!input) return fallback;
     if (typeof input !== 'string') return input;
@@ -142,11 +159,85 @@ const AutomationBuilder = ({ automation, onSave, onActivate, onPause }) => {
   };
 
   const getNodeColor = (type) => {
-    if (type.startsWith('trigger_')) return 'bg-emerald-500 border-emerald-600';
-    if (type.startsWith('action_')) return 'bg-blue-500 border-blue-600';
-    if (type === 'condition' || type === 'ab_split') return 'bg-amber-500 border-amber-600';
-    return 'bg-violet-500 border-violet-600';
+    if (type.startsWith('trigger_')) return nodeColors.trigger;
+    if (type.startsWith('action_')) return nodeColors.action;
+    if (type === 'condition' || type === 'ab_split') return nodeColors.condition;
+    if (type === 'goal') return nodeColors.goal;
+    return nodeColors.delay;
   };
+
+  // Get node category for styling
+  const getNodeCategory = (type) => {
+    if (type.startsWith('trigger_')) return 'trigger';
+    if (type.startsWith('action_')) return 'action';
+    if (type === 'condition' || type === 'ab_split') return 'condition';
+    if (type === 'goal') return 'goal';
+    if (type === 'delay' || type === 'exit') return 'delay';
+    return 'action';
+  };
+
+  // Undo/Redo functions
+  const undo = () => {
+    if (history.past.length > 0) {
+      const previous = history.past[history.past.length - 1];
+      const newPast = history.past.slice(0, -1);
+      setHistory({
+        past: newPast,
+        future: [nodes, ...history.future]
+      });
+      setNodes(previous);
+    }
+  };
+
+  const redo = () => {
+    if (history.future.length > 0) {
+      const next = history.future[0];
+      const newFuture = history.future.slice(1);
+      setHistory({
+        past: [...history.past, nodes],
+        future: newFuture
+      });
+      setNodes(next);
+    }
+  };
+
+  // Save to history when nodes change
+  useEffect(() => {
+    if (nodes) {
+      setHistory(h => ({
+        past: [...h.past.slice(-20), nodes], // Keep last 20 states
+        future: []
+      }));
+    }
+  }, [nodes]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+        if (e.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
+        e.preventDefault();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        handleSave();
+        e.preventDefault();
+      }
+      if (e.key === 'Delete' && selectedNode) {
+        deleteNode(selectedNode.id);
+      }
+      if (e.key === 'Escape') {
+        setSelectedNode(null);
+        setIsConnectMode(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [history, selectedNode]);
 
   // Helper to find icon component from node type
   const getIconComponent = (nodeType) => {
@@ -225,7 +316,22 @@ const AutomationBuilder = ({ automation, onSave, onActivate, onPause }) => {
       )}
 
       {/* Canvas */}
-      <div className="flex-1 relative overflow-hidden bg-dot-pattern" ref={canvasRef}>
+      <div
+        className={`flex-1 relative overflow-hidden ${showGrid ? 'bg-grid-pattern' : 'bg-gray-900'}`}
+        ref={canvasRef}
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget || e.target.tagName === 'DIV') {
+            setIsPanning(true);
+          }
+        }}
+        onMouseMove={(e) => {
+          if (isPanning) {
+            setPan(p => ({ x: p.x + e.movementX, y: p.y + e.movementY }));
+          }
+        }}
+        onMouseUp={() => setIsPanning(false)}
+        onMouseLeave={() => setIsPanning(false)}
+      >
         {/* Toolbar */}
         <div className="absolute top-4 left-4 right-4 z-10 flex justify-between items-center pointer-events-none">
           <div className="pointer-events-auto flex gap-2">
@@ -236,6 +342,29 @@ const AutomationBuilder = ({ automation, onSave, onActivate, onPause }) => {
             >
               {showNodePalette ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
             </button>
+
+            {/* Undo/Redo */}
+            <div className="flex items-center bg-gray-800 rounded-lg border border-gray-700 shadow-sm">
+              <button
+                onClick={undo}
+                disabled={history.past.length === 0}
+                className="p-2 text-white hover:text-blue-400 disabled:opacity-30 disabled:cursor-not-allowed"
+                title="Undo (Ctrl+Z)"
+              >
+                <Undo className="w-4 h-4" />
+              </button>
+              <div className="w-px h-4 bg-gray-600" />
+              <button
+                onClick={redo}
+                disabled={history.future.length === 0}
+                className="p-2 text-white hover:text-blue-400 disabled:opacity-30 disabled:cursor-not-allowed"
+                title="Redo (Ctrl+Shift+Z)"
+              >
+                <Redo className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Zoom */}
             <div className="flex items-center bg-gray-800 rounded-lg border border-gray-700 shadow-sm px-2">
               <button onClick={() => setScale(Math.max(0.2, scale - 0.1))} className="p-2 text-white hover:text-blue-400">
                 <ZoomOut className="w-4 h-4" />
@@ -245,6 +374,18 @@ const AutomationBuilder = ({ automation, onSave, onActivate, onPause }) => {
                 <ZoomIn className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Grid Toggle */}
+            <button
+              onClick={() => setShowGrid(!showGrid)}
+              className={`p-2 border rounded-lg shadow-sm transition-all ${showGrid
+                  ? 'bg-gray-700 text-blue-400 border-gray-600'
+                  : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700'
+                }`}
+              title="Toggle Grid"
+            >
+              <Grid3X3 className="w-4 h-4" />
+            </button>
 
             <button
               onClick={() => { setIsConnectMode(!isConnectMode); setConnectSource(null); }}
@@ -404,6 +545,29 @@ const AutomationBuilder = ({ automation, onSave, onActivate, onPause }) => {
               </div>
             );
           })}
+
+          {/* Minimap */}
+          {showMinimap && nodes.length > 0 && (
+            <div className="absolute bottom-4 right-4 w-48 h-32 bg-gray-800/90 backdrop-blur border border-gray-700 rounded-lg shadow-xl overflow-hidden z-20">
+              <div className="p-2 text-xs text-gray-400 font-medium border-b border-gray-700">Overview</div>
+              <div className="relative w-full h-full">
+                {nodes.map(node => (
+                  <div
+                    key={node.id}
+                    className={`absolute w-3 h-2 rounded-sm ${getNodeColor(node.data.nodeType).bg} cursor-pointer hover:ring-1 hover:ring-white`}
+                    style={{
+                      left: `${(node.position.x / 50)}%`,
+                      top: `${(node.position.y / 30)}%`,
+                    }}
+                    onClick={() => {
+                      setScale(1);
+                      setPan({ x: -node.position.x + 200, y: -node.position.y + 100 });
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

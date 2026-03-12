@@ -35,6 +35,7 @@ func NewStore(path string) (*Store, error) {
 		&models.WebhookLog{},
 		&models.APIKey{},
 		&models.ChatLog{},
+		&models.ActionLog{}, // Anike action logs (immutable)
 		&models.ContactList{},
 		&models.Contact{},
 		&models.Campaign{},
@@ -85,6 +86,8 @@ func NewStore(path string) (*Store, error) {
 		&models.SuppressionV2{},
 		// Per-tenant custom domain config (tracking + unsubscribe domains)
 		&models.OrganizationDomainConfig{},
+		// AI Usage tracking
+		&models.AIUsage{},
 	); err != nil {
 		return nil, err
 	}
@@ -490,6 +493,68 @@ func (s *Store) GetChatHistory(limit int) ([]models.ChatLog, error) {
 }
 
 // ----------------------
+// AI Usage Tracking
+// ----------------------
+
+// SaveAIUsage records AI API usage
+func (s *Store) SaveAIUsage(usage models.AIUsage) error {
+	return s.DB.Create(&usage).Error
+}
+
+// GetAIUsageStats returns AI usage statistics
+func (s *Store) GetAIUsageStats(days int) (map[string]interface{}, error) {
+	var totalUsage []struct {
+		Provider         string
+		TotalTokens      int
+		PromptTokens     int
+		CompletionTokens int
+		CostUSD          float64
+		Count            int
+	}
+
+	// Get usage grouped by provider
+	err := s.DB.Model(&models.AIUsage{}).
+		Select("provider, SUM(total_tokens) as total_tokens, SUM(prompt_tokens) as prompt_tokens, SUM(completion_tokens) as completion_tokens, SUM(cost_usd) as cost_usd, COUNT(*) as count").
+		Where("created_at > ?", time.Now().AddDate(0, 0, -days)).
+		Group("provider").
+		Scan(&totalUsage).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Get daily usage
+	var dailyUsage []struct {
+		Date       string
+		TotalTokens int
+		CostUSD    float64
+	}
+
+	err = s.DB.Model(&models.AIUsage{}).
+		Select("DATE(created_at) as date, SUM(total_tokens) as total_tokens, SUM(cost_usd) as cost_usd").
+		Where("created_at > ?", time.Now().AddDate(0, 0, -days)).
+		Group("DATE(created_at)").
+		Order("date").
+		Scan(&dailyUsage).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Get total counts
+	var totalMessages, totalActions int64
+	s.DB.Model(&models.ChatLog{}).Count(&totalMessages)
+	s.DB.Model(&models.ActionLog{}).Count(&totalActions)
+
+	return map[string]interface{}{
+		"by_provider":   totalUsage,
+		"daily":         dailyUsage,
+		"total_messages": totalMessages,
+		"total_actions": totalActions,
+	}, nil
+}
+
+// ----------------------
 // Suppressions
 // ----------------------
 
@@ -594,6 +659,16 @@ func (s *Store) GetRecentBounces(hours int) ([]models.BounceEvent, error) {
 	since := time.Now().Add(-time.Duration(hours) * time.Hour)
 	err := s.DB.Where("processed_at >= ?", since).
 		Order("processed_at desc").Find(&events).Error
+	return events, err
+}
+
+// GetUnanalyzedBounces returns bounces that haven't been AI-analyzed yet
+func (s *Store) GetUnanalyzedBounces(limit int) ([]models.BounceEvent, error) {
+	var events []models.BounceEvent
+	err := s.DB.Where("ai_analyzed_at IS NULL").
+		Order("processed_at desc").
+		Limit(limit).
+		Find(&events).Error
 	return events, err
 }
 

@@ -72,7 +72,8 @@ type Config struct {
 	RedisDB       int    // SAMPMAIL_REDIS_DB (default: 0)
 
 	// KumoMTA API settings
-	KumoAPIURL string // SAMPMAIL_KUMO_API_URL (default: http://127.0.0.1:8000)
+	KumoAPIURL       string // SAMPMAIL_KUMO_API_URL (default: http://127.0.0.1:8000)
+	UseKumoHTTPAPI   bool   // SAMPMAIL_USE_KUMO_HTTP (default: true - use HTTP API instead of SMTP)
 
 	// Request settings
 	RequestTimeout  time.Duration // SAMPMAIL_REQUEST_TIMEOUT (default: 30s)
@@ -165,7 +166,8 @@ func Get() *Config {
 			RedisDB:       getEnvInt("SAMPMAIL_REDIS_DB", 0),
 
 			// KumoMTA API
-			KumoAPIURL: getEnv("SAMPMAIL_KUMO_API_URL", "http://127.0.0.1:8000"),
+			KumoAPIURL:       getEnv("SAMPMAIL_KUMO_API_URL", "http://127.0.0.1:8000"),
+			UseKumoHTTPAPI:   getEnvBool("SAMPMAIL_USE_KUMO_HTTP", true), // Default to HTTP API
 
 			// Request settings
 			RequestTimeout:  getEnvDuration("SAMPMAIL_REQUEST_TIMEOUT", 30*time.Second),
@@ -282,6 +284,17 @@ func (c *Config) IsTrustedProxy(ip string) bool {
 // IsProduction returns true if running in production mode
 func (c *Config) IsProduction() bool {
 	return os.Getenv("SAMPMAIL_ENV") == "production"
+}
+
+// GetConfig returns the singleton configuration (alias for Get)
+func GetConfig() *Config {
+	return Get()
+}
+
+// ReloadConfig forces reload of configuration on next Get() call
+// This is used when runtime config is updated from the database
+func ReloadConfig() {
+	cfgOnce = sync.Once{}
 }
 
 // DeriveEncryptionKey derives a proper encryption key from the secret

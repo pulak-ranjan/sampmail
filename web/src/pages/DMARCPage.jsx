@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   ShieldCheck, Globe, Settings, Copy, Check, Server, Mail, FileKey, RefreshCw, AlertTriangle
 } from 'lucide-react';
@@ -14,18 +14,18 @@ export default function DMARCPage() {
   const [message, setMessage] = useState('');
 
   const token = localStorage.getItem('sampmail_token');
-  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
 
-  useEffect(() => { fetchDomains(); }, []);
-
-  const fetchDomains = async () => {
+  const fetchDomains = useCallback(async () => {
     try {
       const res = await fetch('/api/domains', { headers });
       if (res.status === 401) { window.location.href = '/login'; return; }
       const data = await res.json();
       setDomains(Array.isArray(data) ? data : []);
     } catch (e) { console.error(e); setDomains([]); }
-  };
+  }, [headers]);
+
+  useEffect(() => { fetchDomains(); }, [fetchDomains]);
 
   const selectDomain = async (domain) => {
     setSelected(domain);

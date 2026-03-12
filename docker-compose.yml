@@ -25,7 +25,7 @@ services:
     build:
       context: .
       args:
-        VERSION: ${SAMPMAIL_VERSION:-0.1.12}
+        VERSION: ${SAMPMAIL_VERSION:-0.4.0}
         BUILD_TIME: ${BUILD_TIME:-}
         GIT_COMMIT: ${GIT_COMMIT:-}
     image: pulak-ranjan/sampmail:latest

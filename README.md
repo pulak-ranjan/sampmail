@@ -74,6 +74,15 @@ The backend is written in Go (Chi router, GORM, PostgreSQL or SQLite). The front
 - Optional Reacher integration for email address verification
 - SOCKS5 and HTTP proxy rotation manager
 
+### AI Assistant (Anike)
+
+- Conversational AI for managing your email campaigns
+- Multi-provider support: OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, Ollama
+- Available via Web UI, Telegram, and Discord
+- Natural language commands: "show my campaigns", "check queue status"
+- Action execution: list stats, manage subscribers, control automations
+- Usage analytics: token tracking, cost calculation, provider breakdown
+
 ### V2 Features (0.2.0)
 
 - Multi-tenant organization model with role-based access
@@ -369,3 +378,9 @@ SampMail is built on the following open-source projects:
 - [React](https://reactjs.org/) - Frontend framework
 - [Tailwind CSS](https://tailwindcss.com/) - Utility-first CSS framework
 - [Redis](https://redis.io/) - Rate limiting and caching
+- [PostgreSQL](https://www.postgresql.org/) - Primary database
+- [SQLite](https://sqlite.org/) - Embedded database option
+- [Nginx](https://nginx.org/) - Reverse proxy and web server
+- [Certbot](https://certbot.eff.org/) - Automated SSL certificates (Let's Encrypt)
+- [Fail2Ban](https://www.fail2ban.org/) - Intrusion prevention
+- [Dovecot](https://www.dovecot.org/) - IMAP/POP3 mail server

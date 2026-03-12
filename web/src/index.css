@@ -2,6 +2,187 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+  /* Grid pattern for automation builder */
+  .bg-grid-pattern {
+    background-image:
+      linear-gradient(to right, rgba(75, 85, 99, 0.3) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(75, 85, 99, 0.3) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  /* Dot pattern fallback */
+  .bg-dot-pattern {
+    background-image: radial-gradient(circle, rgba(75, 85, 99, 0.5) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  /* ============================================
+     FUTURISTIC UI ENHANCEMENTS
+     ============================================ */
+
+  /* Glassmorphism Cards */
+  .glass-card {
+    @apply bg-white/80 dark:bg-gray-900/60 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-xl;
+  }
+
+  .glass-card-hover {
+    @apply glass-card hover:shadow-2xl hover:border-primary/30 transition-all duration-300;
+  }
+
+  /* Gradient Borders */
+  .gradient-border {
+    position: relative;
+    background: inherit;
+  }
+
+  .gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    padding: 1px;
+    border-radius: inherit;
+    background: linear-gradient(135deg, theme('colors.cyan.400'), theme('colors.purple.500'), theme('colors.fuchsia.500'));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .gradient-border:hover::before {
+    opacity: 1;
+  }
+
+  /* Glow Effects */
+  .glow-cyan {
+    box-shadow: 0 0 20px rgba(34, 211, 238, 0.3), 0 0 40px rgba(34, 211, 238, 0.1);
+  }
+
+  .glow-purple {
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.3), 0 0 40px rgba(168, 85, 247, 0.1);
+  }
+
+  .glow-fuchsia {
+    box-shadow: 0 0 20px rgba(232, 121, 249, 0.3), 0 0 40px rgba(232, 121, 249, 0.1);
+  }
+
+  /* Neon Text */
+  .text-neon-cyan {
+    text-shadow: 0 0 10px rgba(34, 211, 238, 0.5), 0 0 20px rgba(34, 211, 238, 0.3);
+  }
+
+  .text-neon-purple {
+    text-shadow: 0 0 10px rgba(168, 85, 247, 0.5), 0 0 20px rgba(168, 85, 247, 0.3);
+  }
+
+  /* Hover Lift with Glow */
+  .lift-glow {
+    @apply transition-all duration-300 ease-out;
+  }
+
+  .lift-glow:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), 0 0 30px rgba(34, 211, 238, 0.15);
+  }
+
+  /* Shimmer Loading Effect */
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      theme('colors.gray.200') 0%,
+      theme('colors.gray.100') 50%,
+      theme('colors.gray.200') 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  .dark .shimmer {
+    background: linear-gradient(
+      90deg,
+      theme('colors.gray.800') 0%,
+      theme('colors.gray.700') 50%,
+      theme('colors.gray.800') 100%
+    );
+    background-size: 200% 100%;
+  }
+
+  /* Animated Gradient Background */
+  .animated-gradient {
+    background: linear-gradient(
+      -45deg,
+      theme('colors.gray.900'),
+      theme('colors.gray.800'),
+      theme('colors.slate.900'),
+      theme('colors.gray.900')
+    );
+    background-size: 400% 400%;
+    animation: gradient-shift 15s ease infinite;
+  }
+
+  /* Floating Animation */
+  .float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .float-delay-1 { animation-delay: 0.5s; }
+  .float-delay-2 { animation-delay: 1s; }
+  .float-delay-3 { animation-delay: 1.5s; }
+
+  /* Pulse Glow */
+  .pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  /* Card Hover Effects */
+  .card-hover-lift {
+    @apply transition-all duration-300 ease-out;
+  }
+
+  .card-hover-lift:hover {
+    transform: translateY(-2px) scale(1.01);
+  }
+
+  /* Focus Ring with Glow */
+  .focus-glow:focus {
+    @apply outline-none ring-2 ring-primary/50 ring-offset-2 ring-offset-background;
+    box-shadow: 0 0 15px rgba(var(--primary), 0.3);
+  }
+
+  /* Backdrop Blur Modal */
+  .modal-backdrop {
+    @apply fixed inset-0 bg-black/60 backdrop-blur-sm z-50;
+  }
+
+  /* Gradient Button */
+  .btn-gradient {
+    background: linear-gradient(135deg, theme('colors.cyan.500'), theme('colors.purple.600'));
+    @apply text-white font-medium;
+  }
+
+  .btn-gradient:hover {
+    background: linear-gradient(135deg, theme('colors.cyan.400'), theme('colors.purple.500'));
+    box-shadow: 0 0 20px rgba(34, 211, 238, 0.4);
+  }
+
+  /* Icon Background Glow */
+  .icon-glow {
+    @apply relative;
+  }
+
+  .icon-glow::after {
+    content: '';
+    @apply absolute inset-0 rounded-lg blur-lg opacity-0 transition-opacity duration-300;
+    background: currentColor;
+  }
+
+  .icon-glow:hover::after {
+    @apply opacity-20;
+  }
+}
+
 @layer base {
   :root {
     /* Light Mode Variables */
@@ -81,12 +262,37 @@
     @apply bg-background text-foreground border border-input placeholder:text-muted-foreground shadow-sm;
   }
   
-  /* Additional override for light mode readability */
-  :root:not(.dark) input,
-  :root:not(.dark) textarea,
-  :root:not(.dark) select {
+  /* Light mode overrides - use :root.light for explicit light mode */
+  :root.light input,
+  :root.light textarea,
+  :root.light select {
     background-color: #ffffff;
     color: #0f172a;
     border-color: #cbd5e1;
+  }
+  
+  /* Also handle when no class (system light) - fallback */
+  :root:not(.dark):not(.light) input,
+  :root:not(.dark):not(.light) textarea,
+  :root:not(.dark):not(.light) select {
+    background-color: #ffffff;
+    color: #0f172a;
+    border-color: #cbd5e1;
+  }
+  
+  /* Light mode card and background overrides */
+  :root.light .bg-card,
+  :root:not(.dark):not(.light) .bg-card {
+    background-color: #ffffff;
+  }
+  
+  :root.light .bg-muted,
+  :root:not(.dark):not(.light) .bg-muted {
+    background-color: #f1f5f9;
+  }
+  
+  :root.light .bg-background,
+  :root:not(.dark):not(.light) .bg-background {
+    background-color: #ffffff;
   }
 }

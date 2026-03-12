@@ -38,6 +38,7 @@ import ServiceManagerPage from './pages/ServiceManagerPage';
 import EmailVerificationPage from './pages/EmailVerificationPage';
 import AdminDashboard from './pages/AdminDashboard';
 import UserDashboard from './pages/UserDashboard';
+import FinancePage from './pages/FinancePage';
 
 import TenantsPage from './pages/admin/TenantsPage';
 import UsersPage from './pages/admin/UsersPage';
@@ -101,6 +102,7 @@ export default function App() {
             <Route path="/dmarc" element={<ProtectedRoute><DMARCPage /></ProtectedRoute>} />
             <Route path="/dkim" element={<ProtectedRoute><DKIMPage /></ProtectedRoute>} />
             <Route path="/bounce" element={<ProtectedRoute><BouncePage /></ProtectedRoute>} />
+            <Route path="/bounce/analysis" element={<SuperAdminRoute><BouncesPage /></SuperAdminRoute>} />
             <Route path="/ips" element={<ProtectedRoute><IPsPage /></ProtectedRoute>} />
             <Route path="/sending-ips" element={<ProtectedRoute><SendingIPsPage /></ProtectedRoute>} />
             <Route path="/proxies" element={<ProtectedRoute><ProxiesPage /></ProtectedRoute>} />
@@ -114,6 +116,7 @@ export default function App() {
             <Route path="/ssl" element={<ProtectedRoute><SSLPage /></ProtectedRoute>} />
             <Route path="/services" element={<ProtectedRoute><ServiceManagerPage /></ProtectedRoute>} />
             <Route path="/verify" element={<ProtectedRoute><EmailVerificationPage /></ProtectedRoute>} />
+            <Route path="/finance" element={<ProtectedRoute><FinancePage /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 
             <Route path="*" element={<Navigate to="/" replace />} />

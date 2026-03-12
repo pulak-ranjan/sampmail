@@ -500,8 +500,12 @@ func (wr *WorkflowRunner) executeSendEmail(run *models.AutomationRunV2, config m
 		Contact:     &contact,
 		CurrentDate: time.Now(),
 	}
-	subject, _ = wr.engine.personalization.Render(subject, ctx)
-	body, _ = wr.engine.personalization.Render(body, ctx)
+	if rendered, err := wr.engine.personalization.Render(subject, ctx); err == nil {
+		subject = rendered
+	}
+	if rendered, err := wr.engine.personalization.Render(body, ctx); err == nil {
+		body = rendered
+	}
 
 	// Send
 	if err := wr.engine.emailService.SendEmail(context.Background(), contact.Email, subject, body); err != nil {

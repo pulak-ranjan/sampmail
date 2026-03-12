@@ -14,6 +14,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/pulak-ranjan/sampmail/internal/logger"
 	"github.com/pulak-ranjan/sampmail/internal/models"
 	"github.com/pulak-ranjan/sampmail/internal/store"
 )
@@ -314,13 +315,13 @@ func (bp *BounceProcessor) processMaildir(dir string) (int, error) {
 		}
 
 		filePath := filepath.Join(dir, file.Name())
-		
+
 		// FIXED: Check file size before reading to prevent memory bombs
 		info, err := file.Info()
 		if err != nil {
 			continue
 		}
-		
+
 		// Skip files larger than 1MB - legitimate bounce emails are small
 		if info.Size() > 1*1024*1024 {
 			log.Printf("[BounceProcessor] Skipping oversized file (%d bytes): %s", info.Size(), filePath)
@@ -329,7 +330,7 @@ func (bp *BounceProcessor) processMaildir(dir string) (int, error) {
 			os.Rename(filePath, curPath)
 			continue
 		}
-		
+
 		content, err := os.ReadFile(filePath)
 		if err != nil {
 			continue
@@ -407,22 +408,22 @@ func (bp *BounceProcessor) processMaildirStreaming(dir string) (int, error) {
 	}
 
 	processed := 0
-	const maxFileSize = 512 * 1024      // 512KB max per file
-	const maxHeaderSize = 32 * 1024     // 32KB for headers (where bounce info is)
-	
+	const maxFileSize = 512 * 1024  // 512KB max per file
+	const maxHeaderSize = 32 * 1024 // 32KB for headers (where bounce info is)
+
 	for _, file := range files {
 		if file.IsDir() {
 			continue
 		}
 
 		filePath := filepath.Join(dir, file.Name())
-		
+
 		// Check file size first
 		info, err := file.Info()
 		if err != nil {
 			continue
 		}
-		
+
 		// Skip oversized files
 		if info.Size() > maxFileSize {
 			log.Printf("[BounceProcessor] Skipping oversized file (%d bytes): %s", info.Size(), filePath)
@@ -430,19 +431,19 @@ func (bp *BounceProcessor) processMaildirStreaming(dir string) (int, error) {
 			os.Rename(filePath, curPath)
 			continue
 		}
-		
+
 		// Read only the headers (most bounce info is in headers)
 		bounceInfo, err := bp.parseBouncEmailStreaming(filePath, maxHeaderSize)
 		if err != nil {
 			continue
 		}
-		
+
 		if bounceInfo != nil && bounceInfo.OriginalRecipient != "" {
 			if err := bp.recordBounce(bounceInfo); err == nil {
 				processed++
 			}
 		}
-		
+
 		// Move to cur/ after processing (success or failure)
 		curPath := filepath.Join(filepath.Dir(dir), "cur", file.Name())
 		os.Rename(filePath, curPath)
@@ -458,14 +459,14 @@ func (bp *BounceProcessor) parseBouncEmailStreaming(filePath string, maxBytes in
 		return nil, err
 	}
 	defer f.Close()
-	
+
 	// Read limited amount
 	reader := io.LimitReader(f, maxBytes)
 	content, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return bp.parseBounceEmail(string(content)), nil
 }
 
@@ -616,15 +617,15 @@ func (bp *BounceProcessor) recordBounce(info *BounceInfo) error {
 			Where("email = ?", email).
 			Update("status", "complained")
 		log.Printf("[BounceProcessor] Complaint processed: %s", email)
-		
+
 		// Update sender reputation
 		if info.CampaignID > 0 {
 			bp.decrementSenderReputation(info.CampaignID, 15)
 		}
-		
+
 	case "alert":
 		// Technical issue - alert but don't suppress
-		log.Printf("[BounceProcessor] ALERT: Technical bounce for %s - %s: %s", 
+		log.Printf("[BounceProcessor] ALERT: Technical bounce for %s - %s: %s",
 			email, classification.Reason, info.DiagnosticMessage)
 	}
 
@@ -638,10 +639,10 @@ func (bp *BounceProcessor) recordBounce(info *BounceInfo) error {
 
 // BounceClassification represents the result of bounce classification
 type BounceClassification struct {
-	Type     string // "hard", "soft", "complaint", "technical"
-	Action   string // "suppress", "retry", "suppress_threshold", "complaint", "alert"
-	Reason   string // Human-readable reason
-	Retryable bool  // Whether this bounce is eligible for retry
+	Type      string // "hard", "soft", "complaint", "technical"
+	Action    string // "suppress", "retry", "suppress_threshold", "complaint", "alert"
+	Reason    string // Human-readable reason
+	Retryable bool   // Whether this bounce is eligible for retry
 }
 
 // classifyBounce determines the precise classification of a bounce
@@ -651,26 +652,26 @@ func (bp *BounceProcessor) classifyBounce(info *BounceInfo) BounceClassification
 		Action:    "retry",
 		Retryable: false,
 	}
-	
+
 	// Check for specific bounce codes
 	code := info.BounceCode
-	
+
 	// Hard bounce codes - permanent failures
 	hardBounceReasons := map[string]string{
-		"5.1.1": "mailbox_does_not_exist",
-		"5.1.2": "domain_does_not_exist",
-		"5.1.3": "invalid_mailbox_syntax",
-		"5.1.4": "mailbox_ambiguous",
-		"5.1.6": "mailbox_moved",
-		"5.2.1": "mailbox_disabled",
-		"5.2.2": "mailbox_full_permanent",
-		"5.2.3": "message_too_long",
-		"5.4.1": "no_answer_from_host",
-		"5.4.4": "unable_to_route",
-		"5.7.1": "delivery_not_authorized",
+		"5.1.1":  "mailbox_does_not_exist",
+		"5.1.2":  "domain_does_not_exist",
+		"5.1.3":  "invalid_mailbox_syntax",
+		"5.1.4":  "mailbox_ambiguous",
+		"5.1.6":  "mailbox_moved",
+		"5.2.1":  "mailbox_disabled",
+		"5.2.2":  "mailbox_full_permanent",
+		"5.2.3":  "message_too_long",
+		"5.4.1":  "no_answer_from_host",
+		"5.4.4":  "unable_to_route",
+		"5.7.1":  "delivery_not_authorized",
 		"5.7.26": "dkim_spf_failure",
 	}
-	
+
 	if reason, isHard := hardBounceReasons[code]; isHard {
 		class.Type = "hard"
 		class.Action = "suppress"
@@ -678,73 +679,73 @@ func (bp *BounceProcessor) classifyBounce(info *BounceInfo) BounceClassification
 		class.Retryable = false
 		return class
 	}
-	
+
 	// Check SMTP codes
 	smtpCode := extractSMTPCodeFromBounce(info.DiagnosticMessage)
-	
+
 	switch {
 	case strings.HasPrefix(smtpCode, "550"):
 		class.Type = "hard"
 		class.Action = "suppress"
 		class.Reason = "mailbox_unavailable"
-		
+
 	case strings.HasPrefix(smtpCode, "551"):
 		class.Type = "hard"
 		class.Action = "suppress"
 		class.Reason = "user_not_local"
-		
+
 	case strings.HasPrefix(smtpCode, "552") && strings.Contains(strings.ToLower(info.DiagnosticMessage), "full"):
 		// Mailbox full - this is actually a soft bounce
 		class.Type = "soft"
 		class.Action = "retry"
 		class.Reason = "mailbox_full"
 		class.Retryable = true
-		
+
 	case strings.HasPrefix(smtpCode, "553"):
 		class.Type = "hard"
 		class.Action = "suppress"
 		class.Reason = "invalid_mailbox_name"
-		
+
 	case strings.HasPrefix(smtpCode, "554"):
 		class.Type = "hard"
 		class.Action = "suppress"
 		class.Reason = "transaction_failed"
-		
+
 	// Soft bounce codes - temporary failures
 	case strings.HasPrefix(smtpCode, "421"):
 		class.Type = "soft"
 		class.Action = "retry"
 		class.Reason = "service_unavailable"
 		class.Retryable = true
-		
+
 	case strings.HasPrefix(smtpCode, "450"):
 		class.Type = "soft"
 		class.Action = "retry"
 		class.Reason = "mailbox_busy"
 		class.Retryable = true
-		
+
 	case strings.HasPrefix(smtpCode, "451"):
 		class.Type = "soft"
 		class.Action = "retry"
 		class.Reason = "local_error"
 		class.Retryable = true
-		
+
 	case strings.HasPrefix(smtpCode, "452"):
 		class.Type = "soft"
 		class.Action = "retry"
 		class.Reason = "insufficient_storage"
 		class.Retryable = true
-		
+
 	case strings.HasPrefix(smtpCode, "4"):
 		class.Type = "soft"
 		class.Action = "retry"
 		class.Reason = "temporary_failure"
 		class.Retryable = true
 	}
-	
+
 	// Check diagnostic message for patterns
 	diagLower := strings.ToLower(info.DiagnosticMessage)
-	
+
 	// Hard bounce patterns
 	hardPatterns := []string{
 		"user unknown",
@@ -757,7 +758,7 @@ func (bp *BounceProcessor) classifyBounce(info *BounceInfo) BounceClassification
 		"permanent failure",
 		"mailbox unavailable",
 	}
-	
+
 	for _, pattern := range hardPatterns {
 		if strings.Contains(diagLower, pattern) {
 			class.Type = "hard"
@@ -767,7 +768,7 @@ func (bp *BounceProcessor) classifyBounce(info *BounceInfo) BounceClassification
 			return class
 		}
 	}
-	
+
 	// Soft bounce patterns
 	softPatterns := []string{
 		"try again later",
@@ -779,7 +780,7 @@ func (bp *BounceProcessor) classifyBounce(info *BounceInfo) BounceClassification
 		"try again",
 		"come back later",
 	}
-	
+
 	for _, pattern := range softPatterns {
 		if strings.Contains(diagLower, pattern) {
 			class.Type = "soft"
@@ -789,7 +790,7 @@ func (bp *BounceProcessor) classifyBounce(info *BounceInfo) BounceClassification
 			return class
 		}
 	}
-	
+
 	// Check for complaint type
 	if info.BounceType == "complaint" {
 		class.Type = "complaint"
@@ -797,7 +798,7 @@ func (bp *BounceProcessor) classifyBounce(info *BounceInfo) BounceClassification
 		class.Reason = "spam_complaint"
 		return class
 	}
-	
+
 	// Check soft bounce threshold
 	if info.BounceType == "soft" {
 		bounces, _ := bp.Store.GetBouncesByEmail(info.OriginalRecipient)
@@ -812,7 +813,7 @@ func (bp *BounceProcessor) classifyBounce(info *BounceInfo) BounceClassification
 			class.Reason = "soft_bounce_threshold_exceeded"
 		}
 	}
-	
+
 	return class
 }
 
@@ -848,10 +849,10 @@ func (bp *BounceProcessor) decrementSenderReputation(campaignID uint, points int
 	if err := bp.Store.DB.First(&campaign, campaignID).Error; err != nil {
 		return
 	}
-	
+
 	bp.Store.DB.Model(&models.Sender{}).
 		Where("id = ?", campaign.SenderID).
-		UpdateColumn("reputation_score", 
+		UpdateColumn("reputation_score",
 			bp.Store.DB.Raw("GREATEST(0, reputation_score - ?)", points))
 }
 
@@ -911,4 +912,86 @@ func (bp *BounceProcessor) GetBounceStats(hours int) (map[string]interface{}, er
 	}
 
 	return stats, nil
+}
+
+// =====================================
+// AI BOUNCE ANALYSIS
+// =====================================
+
+// AnalyzeUnanalyzedBounces analyzes bounces that haven't been AI-analyzed yet
+func (bp *BounceProcessor) AnalyzeUnanalyzedBatches(ollamaURL, model string, batchSize int) (int, error) {
+	if ollamaURL == "" {
+		ollamaURL = "http://localhost:11434"
+	}
+	if model == "" {
+		model = "qwen2.5:0.5b"
+	}
+	if batchSize <= 0 {
+		batchSize = 10
+	}
+
+	client := NewOllamaClient(ollamaURL, model)
+
+	// Check if Ollama is available
+	if err := client.CheckOllamaHealth(); err != nil {
+		logger.Warn("Ollama not available for bounce analysis", "error", err)
+		return 0, fmt.Errorf("Ollama not available: %w", err)
+	}
+
+	// Get unanalyzed bounces
+	bounces, err := bp.Store.GetUnanalyzedBounces(batchSize)
+	if err != nil {
+		return 0, err
+	}
+
+	if len(bounces) == 0 {
+		return 0, nil
+	}
+
+	analyzed := 0
+	for i := range bounces {
+		b := &bounces[i]
+
+		// Skip if already analyzed
+		if b.AICategory != "" {
+			continue
+		}
+
+		analysis, err := client.AnalyzeBounce(b)
+		if err != nil {
+			logger.Warn("failed to analyze bounce with AI", "email", b.Email, "error", err)
+			continue
+		}
+
+		// Update bounce with AI analysis
+		b.AICategory = analysis.Category
+		b.AISeverity = analysis.Severity
+		b.AIExplanation = analysis.Explanation
+		b.AIAction = analysis.Action
+		b.AIIsRetryable = analysis.IsRetryable
+		b.AIIsPermanentFail = analysis.IsPermanentFail
+		b.AIEmailQuality = analysis.EmailQuality
+		now := time.Now()
+		b.AIAnalyzedAt = &now
+
+		// Save to database
+		if err := bp.Store.DB.Save(b).Error; err != nil {
+			logger.Warn("failed to save AI analysis", "email", b.Email, "error", err)
+			continue
+		}
+
+		// Update suppression list based on AI analysis
+		if analysis.IsPermanentFail || analysis.EmailQuality == "invalid" {
+			reason := fmt.Sprintf("AI: %s - %s", analysis.Category, analysis.Action)
+			bp.Store.AddSuppression(b.OrganizationID, b.Email, "hard_bounce", reason)
+		} else if analysis.EmailQuality == "risky" && analysis.IsRetryable == false {
+			reason := fmt.Sprintf("AI: %s - %s", analysis.Category, analysis.Action)
+			bp.Store.AddSuppression(b.OrganizationID, b.Email, "risky", reason)
+		}
+
+		analyzed++
+		logger.Info("analyzed bounce with AI", "email", b.Email, "category", analysis.Category, "action", analysis.Action)
+	}
+
+	return analyzed, nil
 }

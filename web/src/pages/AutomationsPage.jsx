@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     Zap, Plus, Play, Pause, Trash2, Edit2, MoreVertical,
     Users, Clock, Mail, Tag, Link2, FileText, Globe,
@@ -39,9 +39,9 @@ export default function AutomationsPage() {
 
     useEffect(() => {
         fetchAutomations();
-    }, []);
+    }, [fetchAutomations]);
 
-    const fetchAutomations = async () => {
+    const fetchAutomations = useCallback(async () => {
         try {
             setLoading(true);
             const data = await apiRequest('/v2/automations');
@@ -51,7 +51,7 @@ export default function AutomationsPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     const createAutomation = async (formData) => {
         try {

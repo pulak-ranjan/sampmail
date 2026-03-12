@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Users, Plus, Search, Trash2, Upload, Download, UserMinus,
   FileText, CheckCircle, XCircle, AlertTriangle, UserPlus
@@ -19,19 +19,7 @@ const ListsPage = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [confirmState, setConfirmState] = useState(null); // { type: 'deleteList' | 'removeSubscriber', id: string }
 
-  // Fetch lists
-  useEffect(() => {
-    fetchLists();
-  }, []);
-
-  // Fetch subscribers when list changes
-  useEffect(() => {
-    if (selectedList) {
-      fetchSubscribers();
-    }
-  }, [selectedList, pagination.page, search, statusFilter]);
-
-  const fetchLists = async () => {
+  const fetchLists = useCallback(async () => {
     try {
       const res = await fetch('/api/v2/lists', {
         headers: getAuthHeaders(),
@@ -43,9 +31,9 @@ const ListsPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchSubscribers = async () => {
+  const fetchSubscribers = useCallback(async () => {
     if (!selectedList) return;
 
     try {
@@ -69,7 +57,19 @@ const ListsPage = () => {
     } catch (error) {
       console.error('Failed to fetch subscribers:', error);
     }
-  };
+  }, [selectedList, pagination.page, search, statusFilter]);
+
+  // Fetch lists
+  useEffect(() => {
+    fetchLists();
+  }, [fetchLists]);
+
+  // Fetch subscribers when list changes
+  useEffect(() => {
+    if (selectedList) {
+      fetchSubscribers();
+    }
+  }, [selectedList, pagination.page, search, statusFilter, fetchSubscribers]);
 
   const createList = async (listData) => {
     try {

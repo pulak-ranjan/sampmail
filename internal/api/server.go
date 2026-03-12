@@ -135,6 +135,10 @@ func (s *Server) routes() chi.Router {
 		// Settings
 		r.Get("/api/settings", s.handleGetSettings)
 		r.Post("/api/settings", s.handleSetSettings)
+		r.Get("/api/config/runtime", s.handleGetRuntimeConfig)
+		r.Post("/api/config/runtime", s.handleSetRuntimeConfig)
+		r.Get("/api/config/bot", s.handleGetBotConfig)
+		r.Post("/api/config/bot", s.handleSetBotConfig)
 
 		// Domains
 		r.Get("/api/domains", s.handleListDomains)
@@ -193,11 +197,23 @@ func (s *Server) routes() chi.Router {
 		r.Get("/api/stats/summary", s.handleGetStatsSummary)
 		r.Post("/api/stats/refresh", s.handleRefreshStats)
 
-		// Queue
+		// Queue Management
 		r.Get("/api/queue", s.handleGetQueue)
 		r.Get("/api/queue/stats", s.handleGetQueueStats)
 		r.Delete("/api/queue/{id}", s.handleDeleteQueueMessage)
 		r.Post("/api/queue/flush", s.handleFlushQueue)
+		r.Post("/api/queue/retry/{id}", s.handleRetryQueueMessage)
+		r.Post("/api/queue/retry/all", s.handleRetryAllDeferred)
+		r.Delete("/api/queue/bounced", s.handleDeleteBounced)
+		r.Get("/api/queue/domains/kumo", s.handleGetKumoDomainStats)
+
+		// KumoMTA Service Control
+		r.Get("/api/kumo/status", s.handleGetKumoStatus)
+		r.Post("/api/kumo/start", s.handleStartKumo)
+		r.Post("/api/kumo/stop", s.handleStopKumo)
+		r.Post("/api/kumo/restart", s.handleRestartKumo)
+		r.Post("/api/kumo/reload", s.handleReloadKumo)
+		r.Get("/api/kumo/logs", s.handleGetKumoLogs)
 
 		// Webhooks - Settings
 		r.Get("/api/webhooks/settings", s.handleGetWebhookSettings)
@@ -222,6 +238,7 @@ func (s *Server) routes() chi.Router {
 		r.Post("/api/system/ai-analyze", s.handleAIAnalyze)
 		r.Get("/api/ai/history", s.handleGetChatHistory)
 		r.Post("/api/ai/chat", s.handleAIChat)
+		r.Get("/api/ai/usage", s.handleGetAIUsageStats)
 
 		// Warmup Routes
 		r.Get("/api/warmup", s.handleGetWarmupList)
@@ -240,6 +257,11 @@ func (s *Server) routes() chi.Router {
 		r.Get("/api/logs/kumomta", s.handleLogsKumo)
 		r.Get("/api/logs/dovecot", s.handleLogsDovecot)
 		r.Get("/api/logs/fail2ban", s.handleLogsFail2ban)
+
+		// AI Bounce Analysis
+		r.Post("/api/bounces/analyze", s.handleAIBounceAnalysis)
+		r.Get("/api/bounces", s.handleListBounces)
+		r.Get("/api/bounces/stats", s.handleBounceStats)
 
 		// System Health
 		r.Get("/api/system/health", s.handleSystemHealth)
@@ -374,6 +396,12 @@ func (s *Server) routes() chi.Router {
 		wa := NewWhatsAppHandler(s.Store)
 		r.Post("/api/whatsapp/send", wa.HandleSend)
 		r.Post("/api/whatsapp/webhook", wa.HandleWebhook)
+
+		// Telegram Bot Webhook
+		r.Post("/api/telegram/webhook", s.handleTelegramWebhook)
+
+		// Discord Bot Webhook
+		r.Post("/api/discord/webhook", s.handleDiscordWebhook)
 
 		// =====================================
 		// API V2 - Templates, Automations, Campaigns

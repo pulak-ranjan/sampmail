@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Ban, Plus, Search, Trash2, AlertTriangle, UserX } from 'lucide-react';
 import api from '../api';
 
@@ -9,11 +9,7 @@ const SuppressionsPage = () => {
     const [showAdd, setShowAdd] = useState(false);
     const [pagination, setPagination] = useState({ page: 1, total: 0, totalPages: 0 });
 
-    useEffect(() => {
-        fetchSuppressions();
-    }, [pagination.page, search]);
-
-    const fetchSuppressions = async () => {
+    const fetchSuppressions = useCallback(async () => {
         try {
             const params = new URLSearchParams({ page: pagination.page, limit: 50 });
             if (search) params.append('search', search);
@@ -26,7 +22,11 @@ const SuppressionsPage = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [pagination.page, search]);
+
+    useEffect(() => {
+        fetchSuppressions();
+    }, [pagination.page, search, fetchSuppressions]);
 
     const addSuppression = async (email, reason) => {
         try {

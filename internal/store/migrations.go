@@ -509,6 +509,44 @@ var registeredMigrations = []Migration{
 			return nil
 		},
 	},
+	{
+		Version:     16,
+		Description: "Add AI bounce analysis fields",
+		Up: func(db *sql.DB, dialect string) error {
+			fields := []string{
+				"ALTER TABLE bounce_events ADD COLUMN IF NOT EXISTS ai_category VARCHAR(50)",
+				"ALTER TABLE bounce_events ADD COLUMN IF NOT EXISTS ai_severity VARCHAR(20)",
+				"ALTER TABLE bounce_events ADD COLUMN IF NOT EXISTS ai_explanation TEXT",
+				"ALTER TABLE bounce_events ADD COLUMN IF NOT EXISTS ai_action TEXT",
+				"ALTER TABLE bounce_events ADD COLUMN IF NOT EXISTS ai_is_retryable BOOLEAN DEFAULT true",
+				"ALTER TABLE bounce_events ADD COLUMN IF NOT EXISTS ai_is_permanent_fail BOOLEAN DEFAULT false",
+				"ALTER TABLE bounce_events ADD COLUMN IF NOT EXISTS ai_email_quality VARCHAR(20)",
+				"ALTER TABLE bounce_events ADD COLUMN IF NOT EXISTS ai_analyzed_at TIMESTAMP",
+			}
+			for _, f := range fields {
+				if _, err := db.Exec(f); err != nil {
+					logger.Warn("migration field may already exist", "field", f, "error", err)
+				}
+			}
+			return nil
+		},
+		Down: func(db *sql.DB, dialect string) error {
+			drops := []string{
+				"ALTER TABLE bounce_events DROP COLUMN IF EXISTS ai_category",
+				"ALTER TABLE bounce_events DROP COLUMN IF EXISTS ai_severity",
+				"ALTER TABLE bounce_events DROP COLUMN IF EXISTS ai_explanation",
+				"ALTER TABLE bounce_events DROP COLUMN IF EXISTS ai_action",
+				"ALTER TABLE bounce_events DROP COLUMN IF EXISTS ai_is_retryable",
+				"ALTER TABLE bounce_events DROP COLUMN IF EXISTS ai_is_permanent_fail",
+				"ALTER TABLE bounce_events DROP COLUMN IF EXISTS ai_email_quality",
+				"ALTER TABLE bounce_events DROP COLUMN IF EXISTS ai_analyzed_at",
+			}
+			for _, d := range drops {
+				db.Exec(d) //nolint:errcheck
+			}
+			return nil
+		},
+	},
 }
 
 // RegisterMigration adds a new migration
@@ -523,19 +561,17 @@ func RunV2Migrations(gormDB interface{}) error {
 	type sqlDBGetter interface {
 		DB() (*sql.DB, error)
 	}
-	
+
 	getter, ok := gormDB.(sqlDBGetter)
 	if !ok {
 		return fmt.Errorf("cannot get sql.DB from provided database connection")
 	}
-	
+
 	sqlDB, err := getter.DB()
 	if err != nil {
 		return err
 	}
-	
+
 	mgr := NewMigrationManager(sqlDB, "sqlite")
 	return mgr.Migrate()
 }
-
-

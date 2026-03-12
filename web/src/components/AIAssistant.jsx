@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Bot, Send, X, MessageSquare, RefreshCw, Sparkles, ChevronDown, User } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { sendAIChat, apiRequest } from "../api";
@@ -11,33 +11,33 @@ export default function AIAssistant() {
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      loadHistory();
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading, isOpen]);
-
-  const loadHistory = async () => {
+  const loadHistory = useCallback(async () => {
     try {
       const data = await apiRequest("/ai/history");
       if (Array.isArray(data) && data.length > 0) {
         setMessages(data);
-      } else if (messages.length === 0) {
-        setMessages([
+      } else {
+        setMessages(prev => prev.length === 0 ? [
           {
             role: "assistant",
             content: "Hello! I am your **SampMail AI Guardian**. \n\nI can help you audit logs, configure SMTP listeners, manage IP blocks, and analyze bounces.\n\nType a command or ask a question to get started."
           }
-        ]);
+        ] : prev);
       }
     } catch (e) {
       console.error("Failed to load history:", e);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadHistory();
+    }
+  }, [isOpen, loadHistory]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading, isOpen]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -61,20 +61,22 @@ export default function AIAssistant() {
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-4 font-sans antialiased">
       {isOpen && (
-        <div className="w-[400px] h-[600px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl flex flex-col animate-in slide-in-from-bottom-10 fade-in duration-300 overflow-hidden ring-1 ring-black/5">
-          {/* Header */}
-          <div className="px-4 py-3 border-b border-zinc-100 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md flex justify-between items-center sticky top-0 z-10">
+        <div className="w-[400px] h-[600px] bg-gray-900/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl shadow-purple-500/20 flex flex-col animate-in slide-in-from-bottom-10 fade-in duration-300 overflow-hidden ring-1 ring-white/10">
+          {/* Header - Glassmorphism */}
+          <div className="px-4 py-3 border-b border-white/10 bg-gradient-to-r from-gray-900/90 to-purple-900/30 backdrop-blur-xl flex justify-between items-center sticky top-0 z-10">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg shadow-sm text-white relative">
+              <div className="p-2 bg-gradient-to-br from-cyan-500 to-purple-600 rounded-lg shadow-lg shadow-purple-500/30 text-white relative group">
                 <Bot className="w-5 h-5" />
                 <span className="absolute -bottom-1 -right-1 flex h-2.5 w-2.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500 border-2 border-white dark:border-zinc-900"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-400 border-2 border-gray-900 shadow-[0_0_8px_rgba(74,222,128,0.8)]"></span>
                 </span>
               </div>
               <div className="flex flex-col">
-                <span className="font-semibold text-sm text-zinc-900 dark:text-zinc-100">AI Guardian</span>
-                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium tracking-wide uppercase">Online • v1.2</span>
+                <span className="font-semibold text-sm bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">Anike AI</span>
+                <span className="text-[10px] text-gray-400 font-medium tracking-wide uppercase flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 shadow-[0_0_6px_rgba(74,222,128,0.8)]" /> Online
+                </span>
               </div>
             </div>
             <div className="flex gap-1">
@@ -182,17 +184,24 @@ export default function AIAssistant() {
         </div>
       )}
 
-      {/* Toggle Button */}
+      {/* Toggle Button - Futuristic Glow */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          "h-14 w-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 z-50",
+          "h-14 w-14 rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 z-50 relative",
           isOpen
-            ? "bg-zinc-800 text-zinc-300 rotate-90"
-            : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-blue-500/25"
+            ? "bg-gray-800 text-gray-300 rotate-90 border border-white/10"
+            : "bg-gradient-to-r from-cyan-500 to-purple-600 text-white hover:shadow-cyan-500/40"
         )}
       >
-        {isOpen ? <X className="w-6 h-6" /> : <MessageSquare className="w-6 h-6" />}
+        {/* Glow effect */}
+        {!isOpen && (
+          <>
+            <div className="absolute inset-0 rounded-full bg-gradient-to-r from-cyan-400 to-purple-500 opacity-50 blur-md animate-pulse" />
+            <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-cyan-500 to-purple-500 opacity-30 blur-xl" />
+          </>
+        )}
+        {isOpen ? <X className="w-6 h-6" /> : <MessageSquare className="w-6 h-6 relative z-10" />}
       </button>
     </div>
   );

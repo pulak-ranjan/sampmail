@@ -14,9 +14,9 @@ import (
 
 // SECURITY: Input validation patterns
 var (
-	validDomainPattern   = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$`)
+	validDomainPattern    = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$`)
 	validLocalPartPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]*$`)
-	validIPPattern       = regexp.MustCompile(`^(\d{1,3}\.){3}\d{1,3}$`)
+	validIPPattern        = regexp.MustCompile(`^(\d{1,3}\.){3}\d{1,3}$`)
 )
 
 // SourceName returns egress source name
@@ -249,6 +249,8 @@ type LuaConfig struct {
 	SpoolDir     string
 	LogDir       string
 	PolicyDir    string
+	TLSCertPath  string
+	TLSKeyPath   string
 }
 
 // initLuaTemplate is the secure template for init.lua
@@ -284,35 +286,66 @@ kumo.on('init', function()
     trusted_hosts = { '127.0.0.1' },
   }
 
+  -- Define Stealth Trace Settings (hides KumoMTA)
   local trace_settings = {
     received_header = false,
     supplemental_header = true,
     header_name = 'X-RefID',
   }
 
+  -- TLS Configuration: Check if certificates exist, graceful fallback
+  local tls_options = nil
+  local cert_path = '{{.TLSCertPath}}'
+  local key_path = '{{.TLSKeyPath}}'
+
+  local function file_exists(path)
+    local f = io.open(path, "r")
+    if f then f:close() return true end
+    return false
+  end
+
+  if file_exists(cert_path) and file_exists(key_path) then
+    tls_options = {
+      certificate = cert_path,
+      private_key = key_path,
+    }
+  end
+
+  -- Port 25: Main SMTP listener (relay from trusted IPs)
   kumo.start_esmtp_listener {
     listen = '{{.ListenAddr}}',
     hostname = '{{.MainHostname}}',
     banner = '220 ' .. '{{.MainHostname}}',
     relay_hosts = { {{range $i, $h := .RelayHosts}}{{if $i}}, {{end}}'{{$h}}'{{end}} },
     trace_headers = trace_settings,
+    tls_certificate = tls_options and tls_options.certificate or nil,
+    tls_private_key = tls_options and tls_options.private_key or nil,
   }
 
+  -- Port 587: Submission (STARTTLS + AUTH)
   kumo.start_esmtp_listener {
     listen = '0.0.0.0:587',
     hostname = '{{.MainHostname}}',
     banner = '220 ' .. '{{.MainHostname}}',
     relay_hosts = { {{range $i, $h := .RelayHosts}}{{if $i}}, {{end}}'{{$h}}'{{end}} },
     trace_headers = trace_settings,
+    tls_certificate = tls_options and tls_options.certificate or nil,
+    tls_private_key = tls_options and tls_options.private_key or nil,
   }
 
-  kumo.start_esmtp_listener {
-    listen = '0.0.0.0:465',
-    hostname = '{{.MainHostname}}',
-    banner = '220 ' .. '{{.MainHostname}}',
-    relay_hosts = { {{range $i, $h := .RelayHosts}}{{if $i}}, {{end}}'{{$h}}'{{end}} },
-    trace_headers = trace_settings,
-  }
+  -- Port 465: SMTPS (Implicit TLS) - only if certificates exist
+  if tls_options then
+    kumo.start_esmtp_listener {
+      listen = '0.0.0.0:465',
+      hostname = '{{.MainHostname}}',
+      banner = '220 ' .. '{{.MainHostname}}',
+      relay_hosts = { {{range $i, $h := .RelayHosts}}{{if $i}}, {{end}}'{{$h}}'{{end}} },
+      trace_headers = trace_settings,
+      tls_certificate = tls_options.certificate,
+      tls_private_key = tls_options.private_key,
+      tls_implicit = true,
+    }
+  end
 end)
 
 -- Load config files
@@ -322,14 +355,32 @@ local dkim_data = kumo.toml_load('{{.PolicyDir}}/dkim_data.toml')
 local listener_domains = kumo.toml_load('{{.PolicyDir}}/listener_domains.toml')
 local auth_users = kumo.toml_load('{{.PolicyDir}}/auth.toml')
 
-kumo.on('smtp_server_auth_plain', function(auth_user, auth_password)
-  local valid_pass = auth_users[auth_user]
-  if valid_pass and valid_pass == auth_password then
-    return true
+-- =====================================================
+-- SMTP AUTHENTICATION (PLAIN) with logging
+-- =====================================================
+kumo.on('smtp_server_auth_plain', function(authzid, authcid, password)
+  if not auth_users or type(auth_users) ~= 'table' then
+    kumo.log_error("SMTP AUTH: auth.toml not loaded or empty")
+    return false
+  end
+
+  local valid_pass = auth_users[authcid]
+  if valid_pass then
+    if valid_pass == password then
+      kumo.log_info("SMTP AUTH: Success for " .. authcid)
+      return true
+    else
+      kumo.log_error("SMTP AUTH: Invalid password for " .. authcid)
+    end
+  else
+    kumo.log_error("SMTP AUTH: Unknown user " .. authcid)
   end
   return false
 end)
 
+-- =====================================================
+-- TENANT LOGIC (Double-Underscore Separator)
+-- =====================================================
 local function get_tenant_from_sender(sender_email)
   if sender_email then
     local localpart, domain = sender_email:match("([^@]+)@(.+)")
@@ -340,7 +391,19 @@ local function get_tenant_from_sender(sender_email)
   return "default"
 end
 
+-- =====================================================
+-- LISTENER DOMAIN CONFIG
+-- =====================================================
 kumo.on('get_listener_domain', function(domain, listener, conn_meta)
+  local authz_id = conn_meta:get_meta('authz_id')
+  if authz_id then
+    return kumo.make_listener_domain {
+      relay_to = true,
+      log_oob = true,
+      log_arf = true,
+    }
+  end
+
   if listener_domains[domain] then
     local config = listener_domains[domain]
     return kumo.make_listener_domain {
@@ -352,6 +415,9 @@ kumo.on('get_listener_domain', function(domain, listener, conn_meta)
   return kumo.make_listener_domain { relay_to = false }
 end)
 
+-- =====================================================
+-- EGRESS POOLS / SOURCES
+-- =====================================================
 kumo.on('get_egress_pool', function(pool_name)
   if sources_data[pool_name] then
     return kumo.make_egress_pool {
@@ -374,33 +440,106 @@ kumo.on('get_egress_source', function(source_name)
   return kumo.make_egress_source { name = source_name }
 end)
 
+-- =====================================================
+-- ISP TRAFFIC SHAPING (Protect sender reputation)
+-- =====================================================
+local google_limits = {
+  max_message_rate = '50/h',
+  max_connection_rate = '5/min',
+  max_deliveries_per_connection = 20,
+  connection_limit = 3,
+}
+local microsoft_limits = {
+  max_message_rate = '50/h',
+  max_connection_rate = '3/min',
+  max_deliveries_per_connection = 10,
+  connection_limit = 2,
+}
+local yahoo_limits = {
+  max_message_rate = '100/h',
+  max_connection_rate = '5/min',
+  max_deliveries_per_connection = 20,
+  connection_limit = 3,
+}
+
+local isp_patterns = {
+  { pattern = 'google.com',     limits = google_limits },
+  { pattern = 'google.co.',    limits = google_limits },
+  { pattern = 'googlemail.com', limits = google_limits },
+  { pattern = 'outlook.com',    limits = microsoft_limits },
+  { pattern = 'hotmail.com',    limits = microsoft_limits },
+  { pattern = 'live.com',       limits = microsoft_limits },
+  { pattern = 'office365.com',  limits = microsoft_limits },
+  { pattern = 'yahoodns.net',   limits = yahoo_limits },
+  { pattern = 'yahoo.com',      limits = yahoo_limits },
+  { pattern = 'aol.com',        limits = yahoo_limits },
+}
+
+local function get_isp_limit(site_name)
+  local sn = site_name:lower()
+  for _, entry in ipairs(isp_patterns) do
+    if sn:find(entry.pattern, 1, true) then
+      return entry.limits
+    end
+  end
+  return nil
+end
+
 kumo.on('get_egress_path_config', function(domain, egress_source, site_name)
+  local limits = get_isp_limit(site_name)
+  if limits then
+    return kumo.make_egress_path {
+      enable_tls = 'OpportunisticInsecure',
+      enable_mta_sts = false,
+      max_message_rate = limits.max_message_rate,
+      max_connection_rate = limits.max_connection_rate,
+      max_deliveries_per_connection = limits.max_deliveries_per_connection,
+      connection_limit = limits.connection_limit,
+    }
+  end
+
+  -- Default limits
   return kumo.make_egress_path {
     enable_tls = 'OpportunisticInsecure',
     enable_mta_sts = false,
+    max_connection_rate = '10/min',
+    max_deliveries_per_connection = 50,
+    connection_limit = 5,
   }
 end)
 
+-- =====================================================
+-- QUEUE CONFIG
+-- =====================================================
 kumo.on('get_queue_config', function(domain, tenant, campaign, routing_domain)
   tenant = tenant or "default"
   local cfg = queues_data['tenant:' .. tenant] or {}
   return kumo.make_queue_config {
     egress_pool = cfg.egress_pool or tenant,
-    retry_interval = cfg.retry_interval or '1m',
+    retry_interval = cfg.retry_interval or '5m',
     max_age = cfg.max_age or '3d',
     max_message_rate = cfg.max_message_rate,
   }
 end)
 
+-- =====================================================
+-- DKIM SIGNING
+-- =====================================================
 local function dkim_sign_message(msg)
   local sender = msg:from_header()
-  if not sender then return end
+  if not sender then
+    kumo.log_error("DKIM: missing From header")
+    return
+  end
 
   local sender_email = sender.email:lower()
   local sender_domain = sender.domain:lower()
 
   local domain_cfg = dkim_data.domain[sender_domain]
-  if not domain_cfg or not domain_cfg.policy then return end
+  if not domain_cfg or not domain_cfg.policy then
+    kumo.log_error("DKIM: no DKIM config for domain " .. sender_domain)
+    return
+  end
 
   for _, policy in ipairs(domain_cfg.policy) do
     if sender_email == policy.match_sender:lower() then
@@ -413,15 +552,53 @@ local function dkim_sign_message(msg)
       return
     end
   end
+
+  kumo.log_error("DKIM: no identity match for " .. sender_email)
 end
 
+-- =====================================================
+-- HEADER SCRUBBING + SAFE RECEIVED HEADER
+-- =====================================================
 local function scrub_headers(msg)
   msg:remove_all_named_headers('User-Agent')
   msg:remove_all_named_headers('X-Mailer')
   msg:remove_all_named_headers('X-Originating-IP')
+  msg:remove_all_named_headers('X-Report-Abuse')
+  msg:remove_all_named_headers('X-EBS')
   msg:remove_x_headers { 'x-campaign', 'x-tenant', 'x-kumomta' }
+
+  local remote_ip = msg:get_meta('received_from_ip') or '127.0.0.1'
+  local timestamp = os.date("%a, %d %b %Y %H:%M:%S %z")
+  local rcpt = msg:recipient() or "unknown"
+
+  msg:prepend_header('Received', string.format(
+    "from %s ([%s])\r\n\tby %s (Postfix) with ESMTPS\r\n\tfor <%s>; %s",
+    msg:get_meta('received_from_name') or 'localhost',
+    remote_ip,
+    '{{.MainHostname}}',
+    rcpt,
+    timestamp
+  ))
 end
 
+-- =====================================================
+-- ENVELOPE-FROM SEPARATION (Bounce handling per sender)
+-- =====================================================
+local function set_envelope_from(msg)
+  local sender = msg:from_header()
+  if not sender then return end
+
+  local localpart = sender.email:match("([^@]+)@")
+  local domain = sender.domain
+  if localpart and domain then
+    local envelope = string.format('%s@%s.%s', localpart, localpart, domain)
+    msg:set_sender(envelope)
+  end
+end
+
+-- =====================================================
+-- SMTP PATH (SMTP injection)
+-- =====================================================
 kumo.on('smtp_server_message_received', function(msg)
   local sender = msg:from_header()
   local sender_email = sender and sender.email or ""
@@ -431,10 +608,14 @@ kumo.on('smtp_server_message_received', function(msg)
   local campaign = msg:get_first_named_header_value('X-Campaign')
   if campaign then msg:set_meta('campaign', campaign) end
 
+  set_envelope_from(msg)
   scrub_headers(msg)
   dkim_sign_message(msg)
 end)
 
+-- =====================================================
+-- HTTP / API PATH
+-- =====================================================
 kumo.on('http_message_generated', function(msg)
   local tenant = msg:get_first_named_header_value('X-Tenant')
   if not tenant then
@@ -447,10 +628,12 @@ kumo.on('http_message_generated', function(msg)
   local campaign = msg:get_first_named_header_value('X-Campaign')
   if campaign then msg:set_meta('campaign', campaign) end
 
+  set_envelope_from(msg)
   scrub_headers(msg)
   dkim_sign_message(msg)
 end)
 
+-- Custom hook for manual overrides
 pcall(dofile, '{{.PolicyDir}}/custom.lua')
 `
 
@@ -461,6 +644,8 @@ func GenerateInitLua(snap *Snapshot) string {
 	mainHostname := "localhost"
 	relayIPs := []string{"127.0.0.1"}
 	listenAddr := "127.0.0.1:25"
+	tlsCertPath := "/etc/ssl/certs/mail.crt"
+	tlsKeyPath := "/etc/ssl/private/mail.key"
 
 	if snap.Settings != nil {
 		if snap.Settings.MainHostname != "" {
@@ -488,6 +673,8 @@ func GenerateInitLua(snap *Snapshot) string {
 		SpoolDir:     cfg.SpoolDir,
 		LogDir:       cfg.LogDir,
 		PolicyDir:    cfg.PolicyPath(),
+		TLSCertPath:  tlsCertPath,
+		TLSKeyPath:   tlsKeyPath,
 	}
 
 	tmpl, err := template.New("initlua").Parse(initLuaTemplate)

@@ -336,17 +336,23 @@ func (dl *DomainLimiter) GetStats(ctx context.Context, domain string) (*DomainRa
 	// Get current counts
 	minuteKey := fmt.Sprintf("ratelimit:%s:minute:%d", domain, now.Unix()/60)
 	if count, err := dl.redis.Get(ctx, minuteKey).Result(); err == nil {
-		stats.CurrentMinute, _ = strconv.Atoi(count)
+		if parsed, err := strconv.Atoi(count); err == nil {
+			stats.CurrentMinute = parsed
+		}
 	}
-	
+
 	hourKey := fmt.Sprintf("ratelimit:%s:hour:%d", domain, now.Unix()/3600)
 	if count, err := dl.redis.Get(ctx, hourKey).Result(); err == nil {
-		stats.CurrentHour, _ = strconv.Atoi(count)
+		if parsed, err := strconv.Atoi(count); err == nil {
+			stats.CurrentHour = parsed
+		}
 	}
-	
+
 	dayKey := fmt.Sprintf("ratelimit:%s:day:%s", domain, now.Format("2006-01-02"))
 	if count, err := dl.redis.Get(ctx, dayKey).Result(); err == nil {
-		stats.CurrentDay, _ = strconv.Atoi(count)
+		if parsed, err := strconv.Atoi(count); err == nil {
+			stats.CurrentDay = parsed
+		}
 	}
 	
 	// Get limits

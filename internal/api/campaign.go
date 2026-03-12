@@ -32,6 +32,10 @@ func (h *CampaignHandler) Routes(r chi.Router) {
 	r.Post("/", h.createCampaign)
 	r.Post("/{id}/import", h.importRecipients)
 	r.Post("/{id}/send", h.startCampaign)
+	r.Post("/{id}/pause", h.pauseCampaign)
+	r.Post("/{id}/resume", h.resumeCampaign)
+	r.Post("/{id}/cancel", h.cancelCampaign)
+	r.Get("/{id}/status", h.getCampaignStatus)
 	r.Get("/{id}", h.getCampaign)
 }
 
@@ -202,6 +206,155 @@ func (h *CampaignHandler) startCampaign(w http.ResponseWriter, r *http.Request) 
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "started"})
+}
+
+func (h *CampaignHandler) pauseCampaign(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, _ := strconv.Atoi(idStr)
+
+	// Verify campaign ownership
+	if orgID > 0 {
+		var campaign models.Campaign
+		if err := h.Store.DB.First(&campaign, id).Error; err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "campaign not found"})
+			return
+		}
+		if campaign.OrganizationID != orgID {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "access denied"})
+			return
+		}
+	}
+
+	if err := core.PauseCampaign(uint(id)); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	// Update campaign status in DB
+	h.Store.DB.Model(&models.Campaign{}).Where("id = ?", id).Update("status", "paused")
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "paused"})
+}
+
+func (h *CampaignHandler) resumeCampaign(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, _ := strconv.Atoi(idStr)
+
+	// Verify campaign ownership
+	if orgID > 0 {
+		var campaign models.Campaign
+		if err := h.Store.DB.First(&campaign, id).Error; err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "campaign not found"})
+			return
+		}
+		if campaign.OrganizationID != orgID {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "access denied"})
+			return
+		}
+	}
+
+	if err := core.ResumeCampaign(uint(id)); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	// Update campaign status in DB
+	h.Store.DB.Model(&models.Campaign{}).Where("id = ?", id).Update("status", "sending")
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "resumed"})
+}
+
+func (h *CampaignHandler) cancelCampaign(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, _ := strconv.Atoi(idStr)
+
+	// Verify campaign ownership
+	if orgID > 0 {
+		var campaign models.Campaign
+		if err := h.Store.DB.First(&campaign, id).Error; err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "campaign not found"})
+			return
+		}
+		if campaign.OrganizationID != orgID {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "access denied"})
+			return
+		}
+	}
+
+	if err := core.CancelCampaign(uint(id)); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	// Update campaign status in DB
+	h.Store.DB.Model(&models.Campaign{}).Where("id = ?", id).Update("status", "cancelled")
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
+}
+
+func (h *CampaignHandler) getCampaignStatus(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := getOrgID(w, r)
+	if !ok {
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, _ := strconv.Atoi(idStr)
+
+	// Verify campaign ownership
+	if orgID > 0 {
+		var campaign models.Campaign
+		if err := h.Store.DB.First(&campaign, id).Error; err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "campaign not found"})
+			return
+		}
+		if campaign.OrganizationID != orgID {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "access denied"})
+			return
+		}
+	}
+
+	// Get runtime status from campaign control
+	status, exists := core.GetCampaignStatus(uint(id))
+
+	if !exists {
+		// Return DB status if not in runtime
+		var campaign models.Campaign
+		h.Store.DB.First(&campaign, id)
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"status":      campaign.Status,
+			"total_sent":  campaign.TotalSent,
+			"total_failed": campaign.TotalFailed,
+		})
+		return
+	}
+
+	// Get full campaign data
+	var campaign models.Campaign
+	h.Store.DB.First(&campaign, id)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":        status,
+		"db_status":     campaign.Status,
+		"total_sent":    campaign.TotalSent,
+		"total_failed":  campaign.TotalFailed,
+		"exists":        exists,
+	})
 }
 
 func (h *CampaignHandler) getCampaign(w http.ResponseWriter, r *http.Request) {

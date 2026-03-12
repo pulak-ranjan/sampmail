@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Plus, Copy, Trash2, Eye, Edit, Search, Folder, File, Code, Layout } from 'lucide-react';
 import api from '../api';
 import ConfirmationModal from '../components/ConfirmationModal';
@@ -15,11 +15,7 @@ export default function TemplatesPage() {
   const [previewHtml, setPreviewHtml] = useState('');
   const [deleteId, setDeleteId] = useState(null);
 
-  useEffect(() => {
-    loadTemplates();
-  }, [search, selectedCategory]);
-
-  const loadTemplates = async () => {
+  const loadTemplates = useCallback(async () => {
     try {
       const params = new URLSearchParams();
       if (search) params.append('search', search);
@@ -34,7 +30,11 @@ export default function TemplatesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [search, selectedCategory]);
+
+  useEffect(() => {
+    loadTemplates();
+  }, [search, selectedCategory, loadTemplates]);
 
   const handleCreate = () => {
     setEditingTemplate({

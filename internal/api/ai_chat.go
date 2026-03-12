@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,6 +50,23 @@ func (s *Server) handleGetChatHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, logs)
+}
+
+// GET /api/ai/usage
+func (s *Server) handleGetAIUsageStats(w http.ResponseWriter, r *http.Request) {
+	days := 30 // default to last 30 days
+	if d := r.URL.Query().Get("days"); d != "" {
+		if parsed, err := strconv.Atoi(d); err == nil && parsed > 0 {
+			days = parsed
+		}
+	}
+
+	stats, err := s.Store.GetAIUsageStats(days)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch usage stats"})
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
 }
 
 // POST /api/ai/chat

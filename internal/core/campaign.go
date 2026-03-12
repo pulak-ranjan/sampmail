@@ -30,12 +30,133 @@ type CampaignService struct {
 	WorkerCount int
 }
 
+// CampaignControl holds pause/resume state for a campaign
+type CampaignControl struct {
+	mu           sync.RWMutex
+	isPaused     bool
+	isCancelled  bool
+	pausedChan   chan struct{}
+	resumedChan  chan struct{}
+	cancelledChn chan struct{}
+}
+
+// RunningCampaigns tracks all actively sending campaigns
+var RunningCampaigns = make(map[uint]*CampaignControl)
+var runningCampaignsMu sync.RWMutex
+
 func NewCampaignService(st *store.Store) *CampaignService {
 	cfg := config.Get()
 	return &CampaignService{
 		Store:       st,
 		WorkerCount: cfg.CampaignWorkers,
 	}
+}
+
+// GetCampaignControl returns the control struct for a campaign, creating if needed
+func GetCampaignControl(campaignID uint) *CampaignControl {
+	runningCampaignsMu.Lock()
+	defer runningCampaignsMu.Unlock()
+
+	if ctrl, exists := RunningCampaigns[campaignID]; exists {
+		return ctrl
+	}
+
+	ctrl := &CampaignControl{
+		pausedChan:   make(chan struct{}),
+		resumedChan:  make(chan struct{}),
+		cancelledChn: make(chan struct{}),
+	}
+	RunningCampaigns[campaignID] = ctrl
+	return ctrl
+}
+
+// RemoveCampaignControl removes a campaign from the running map
+func RemoveCampaignControl(campaignID uint) {
+	runningCampaignsMu.Lock()
+	defer runningCampaignsMu.Unlock()
+	delete(RunningCampaigns, campaignID)
+}
+
+// IsCampaignPaused checks if a campaign is paused
+func IsCampaignPaused(campaignID uint) bool {
+	runningCampaignsMu.RLock()
+	defer runningCampaignsMu.RUnlock()
+
+	if ctrl, exists := RunningCampaigns[campaignID]; exists {
+		ctrl.mu.RLock()
+		defer ctrl.mu.RUnlock()
+		return ctrl.isPaused
+	}
+	return false
+}
+
+// PauseCampaign pauses a running campaign
+func PauseCampaign(campaignID uint) error {
+	runningCampaignsMu.RLock()
+	defer runningCampaignsMu.RUnlock()
+
+	if ctrl, exists := RunningCampaigns[campaignID]; exists {
+		ctrl.mu.Lock()
+		ctrl.isPaused = true
+		ctrl.mu.Unlock()
+		close(ctrl.pausedChan)
+		logger.Info("Campaign paused", "campaign_id", campaignID)
+		return nil
+	}
+	return fmt.Errorf("campaign %d not running", campaignID)
+}
+
+// ResumeCampaign resumes a paused campaign
+func ResumeCampaign(campaignID uint) error {
+	runningCampaignsMu.RLock()
+	defer runningCampaignsMu.RUnlock()
+
+	if ctrl, exists := RunningCampaigns[campaignID]; exists {
+		ctrl.mu.Lock()
+		ctrl.isPaused = false
+		ctrl.mu.Unlock()
+		// Create new channel for future pauses
+		ctrl.pausedChan = make(chan struct{})
+		close(ctrl.resumedChan)
+		logger.Info("Campaign resumed", "campaign_id", campaignID)
+		return nil
+	}
+	return fmt.Errorf("campaign %d not found", campaignID)
+}
+
+// CancelCampaign cancels a running campaign
+func CancelCampaign(campaignID uint) error {
+	runningCampaignsMu.RLock()
+	defer runningCampaignsMu.RUnlock()
+
+	if ctrl, exists := RunningCampaigns[campaignID]; exists {
+		ctrl.mu.Lock()
+		ctrl.isCancelled = true
+		ctrl.mu.Unlock()
+		close(ctrl.cancelledChn)
+		logger.Info("Campaign cancelled", "campaign_id", campaignID)
+		return nil
+	}
+	return fmt.Errorf("campaign %d not running", campaignID)
+}
+
+// GetCampaignStatus returns the current status of a campaign
+func GetCampaignStatus(campaignID uint) (string, bool) {
+	runningCampaignsMu.RLock()
+	defer runningCampaignsMu.RUnlock()
+
+	if ctrl, exists := RunningCampaigns[campaignID]; exists {
+		ctrl.mu.RLock()
+		defer ctrl.mu.RUnlock()
+		if ctrl.isCancelled {
+			return "cancelled", true
+		}
+		if ctrl.isPaused {
+			return "paused", true
+		}
+		return "sending", true
+	}
+	return "", false
 }
 
 // recipientJob represents a single email to send
@@ -240,6 +361,9 @@ func (cs *CampaignService) StartCampaign(campaignID uint) error {
 		return fmt.Errorf("no pending recipients to send to")
 	}
 
+	// Register campaign control for pause/resume
+	GetCampaignControl(campaignID)
+
 	campaign.Status = "sending"
 	cs.Store.DB.Save(&campaign)
 
@@ -259,6 +383,8 @@ func (cs *CampaignService) processCampaignWithPool(c models.Campaign) {
 			c.Status = "failed"
 			cs.Store.DB.Save(&c)
 		}
+		// Clean up campaign control
+		RemoveCampaignControl(c.ID)
 	}()
 
 	log.Info("starting campaign",
@@ -273,29 +399,32 @@ func (cs *CampaignService) processCampaignWithPool(c models.Campaign) {
 	baseURL := buildBaseURL(cs.Store, c.OrganizationID, "tracking")
 	unsubBaseURL := buildBaseURL(cs.Store, c.OrganizationID, "unsub")
 
+	// Get campaign control for pause/resume
+	ctrl := GetCampaignControl(c.ID)
+
 	// =====================================
 	// WARMUP INTEGRATION
 	// =====================================
 	// Check if sender is in warmup mode and apply rate limiting
 	var warmupTicker *time.Ticker
 	var warmupInterval time.Duration
-	
+
 	if sender.WarmupEnabled {
 		warmupRate := GetWarmupRateForSender(&sender)
 		warmupInterval = warmupRate.Interval
-		
+
 		log.Info("warmup mode enabled",
 			"day", sender.WarmupDay,
 			"plan", sender.WarmupPlan,
 			"rate", fmt.Sprintf("%d/hr", warmupRate.Count),
 			"interval", warmupInterval)
-		
+
 		// Set domain limiter warmup factor
 		if dl := GetDomainLimiter(); dl != nil {
 			warmupFactor := GetWarmupFactor(&sender)
 			dl.SetWarmupFactor(sender.Domain.Name, warmupFactor)
 		}
-		
+
 		// Create ticker for warmup throttling
 		warmupTicker = time.NewTicker(warmupInterval)
 		defer warmupTicker.Stop()
@@ -315,7 +444,7 @@ func (cs *CampaignService) processCampaignWithPool(c models.Campaign) {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
-			cs.sendWorker(ctx, workerID, jobs, results, cfg.SMTPAddr)
+			cs.sendWorker(ctx, workerID, jobs, results, cfg.SMTPAddr, cfg.UseKumoHTTPAPI)
 		}(i)
 	}
 
@@ -375,6 +504,30 @@ func (cs *CampaignService) processCampaignWithPool(c models.Campaign) {
 	// Feed jobs to workers
 	batchSize := 500
 	for {
+		// Check for pause request
+		ctrl.mu.RLock()
+		isPaused := ctrl.isPaused
+		isCancelled := ctrl.isCancelled
+		ctrl.mu.RUnlock()
+
+		if isCancelled {
+			log.Info("campaign cancelled by user")
+			cancel()
+			break
+		}
+
+		if isPaused {
+			log.Info("campaign paused, waiting for resume...")
+			// Wait for resume signal
+			select {
+			case <-ctrl.resumedChan:
+				log.Info("campaign resumed")
+			case <-time.After(5 * time.Second):
+				// Check again after timeout
+				continue
+			}
+		}
+
 		var recipients []models.CampaignRecipient
 		if err := cs.Store.DB.Where("campaign_id = ? AND status = 'pending'", c.ID).
 			Limit(batchSize).Find(&recipients).Error; err != nil {
@@ -452,13 +605,28 @@ func (cs *CampaignService) processCampaignWithPool(c models.Campaign) {
 	c.TotalSent = int(totalSent.Load())
 	c.TotalFailed = int(totalFailed.Load())
 
-	// Set status based on whether campaign was paused due to bounce rate
-	if campaignPaused.Load() {
+	// Check campaign status - prioritize user pause over bounce pause
+	ctrl.mu.RLock()
+	isCancelled := ctrl.isCancelled
+	isPaused := ctrl.isPaused
+	ctrl.mu.RUnlock()
+
+	if isCancelled {
+		c.Status = "cancelled"
+		log.Info("campaign cancelled by user",
+			"sent", c.TotalSent,
+			"failed", c.TotalFailed)
+	} else if campaignPaused.Load() {
 		c.Status = "paused"
 		log.Warn("campaign paused due to high bounce rate",
 			"sent", c.TotalSent,
 			"failed", c.TotalFailed,
 			"bounced", totalBounced.Load())
+	} else if isPaused {
+		// Still paused by user - don't change status, let them resume
+		log.Info("campaign still paused",
+			"sent", c.TotalSent,
+			"failed", c.TotalFailed)
 	} else {
 		c.Status = "completed"
 		log.Info("campaign completed",
@@ -469,10 +637,24 @@ func (cs *CampaignService) processCampaignWithPool(c models.Campaign) {
 }
 
 // sendWorker is a worker goroutine that sends emails
-func (cs *CampaignService) sendWorker(ctx context.Context, id int, jobs <-chan recipientJob, results chan<- SendResult, smtpAddr string) {
+func (cs *CampaignService) sendWorker(ctx context.Context, id int, jobs <-chan recipientJob, results chan<- SendResult, smtpAddr string, useHTTP bool) {
 	log := logger.WithComponent("send_worker").With("worker_id", id)
 
-	// Create persistent connection
+	// If using HTTP API, no need for SMTP connection
+	if useHTTP {
+		for job := range jobs {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			result := cs.sendSingleRecipientViaHTTP(job)
+			results <- result
+		}
+		return
+	}
+
+	// Create persistent SMTP connection
 	var client *smtp.Client
 	var conn net.Conn
 
@@ -638,6 +820,63 @@ func (cs *CampaignService) sendSingleRecipient(client *smtp.Client, job recipien
 		result.Error = "close failed: " + err.Error()
 		return result
 	}
+
+	result.Status = "sent"
+	result.SentAt = time.Now()
+	return result
+}
+
+// sendSingleRecipientViaHTTP sends to one recipient via KumoMTA HTTP API
+func (cs *CampaignService) sendSingleRecipientViaHTTP(job recipientJob) SendResult {
+	result := SendResult{
+		RecipientID: job.Recipient.ID,
+		Status:      "failed",
+	}
+
+	// Build personalization
+	pe := NewPersonalizationEngine()
+	ctx := &PersonalizationContext{
+		CustomData: map[string]interface{}{
+			"email": job.Recipient.Email,
+		},
+	}
+
+	// Try to load contact data for personalization
+	if job.Recipient.ContactID > 0 {
+		var contact models.ContactV2
+		if err := cs.Store.DB.First(&contact, job.Recipient.ContactID).Error; err == nil {
+			ctx.Contact = &contact
+			ctx.CustomData["first_name"] = contact.FirstName
+			ctx.CustomData["last_name"] = contact.LastName
+			ctx.CustomData["company"] = contact.Company
+		}
+	}
+
+	// Render personalized content
+	personalizedBody, err := pe.Render(job.Campaign.Body, ctx)
+	if err != nil {
+		personalizedBody = job.Campaign.Body
+	}
+
+	// Build message via HTTP API
+	mailReq := &KumoMailRequest{
+		From:    job.Sender.Email,
+		To:      job.Recipient.Email,
+		Subject: job.Subject,
+		HTML:    personalizedBody,
+		Headers: map[string]string{
+			"X-Campaign": strconv.FormatUint(uint64(job.Campaign.ID), 10),
+		},
+	}
+
+	queueID, err := SendMailViaHTTP(mailReq)
+	if err != nil {
+		result.Error = "HTTP send failed: " + err.Error()
+		return result
+	}
+
+	log := logger.WithComponent("kumo_http").With("campaign_id", job.Campaign.ID)
+	log.Debug("Email queued via HTTP", "queue_id", queueID, "to", job.Recipient.Email)
 
 	result.Status = "sent"
 	result.SentAt = time.Now()

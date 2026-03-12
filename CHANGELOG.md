@@ -5,7 +5,63 @@ All notable changes to SampMail will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.18] - 2026-01-06
+## [0.4.0] - 2026-03-12
+
+### AI Assistant Release - Anike
+
+This major release introduces Anike, a conversational AI assistant for SampMail.
+
+### Added
+
+#### Anike AI Assistant
+- **Multi-Provider AI Support**: OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, Ollama
+- **Token-Based Context Trimming**: Efficient conversation management
+- **Conversation History**: Stored in database for persistent chat
+- **Natural Language Action Detection**: Understands commands like "show my campaigns"
+- **Safe Action Execution**: Sandboxed actions with audit logging
+
+#### Anike Actions
+- Stats and analytics
+- Campaign management (list, status, create)
+- Subscriber management (list, add, count)
+- Queue status monitoring
+- Template listing
+- Automation control (start, stop, status)
+- Subscriber list management (create lists, add subscribers)
+- Test email preparation
+- System information
+
+#### Bot Integrations
+- **Telegram Bot**: Full webhook integration with Anike
+- **Discord Bot**: Webhook handler for Discord interactions
+- **Cross-Platform**: Unified Anike experience on web, Telegram, and Discord
+
+#### AI Usage Analytics
+- **Token Tracking**: Prompt, completion, and total tokens per request
+- **Cost Calculation**: USD cost per provider
+- **Usage Statistics**: By provider, daily breakdown, platform source
+- **API Endpoint**: GET /api/ai/usage
+
+#### UI Enhancements
+- **Glassmorphism Sidebar**: Modern frosted glass effect
+- **Glow Effects**: Cyan/purple neon accents
+- **Animated Gradients**: Smooth hover transitions
+- **Floating AI Assistant**: Collapsible chat window with history
+- **Enhanced Dashboard**: Stat cards with glassmorphism
+
+### Changed
+- Professional text formatting (removed emojis from bot responses)
+- Fixed ignored error handling in analytics and domain limiter
+- Improved automation engine personalization rendering
+
+### Fixed
+- Error handling in strconv.Atoi calls
+- Personalization rendering errors in automation engine
+- Campaign ID parsing in analytics
+
+---
+
+## [0.3.19] - 2026-01-06
 
 ### Fixed
 - **Layout.jsx**: Fixed `ReferenceError: user is not defined` crash on dashboard load
@@ -15,6 +71,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **DNS & IP Reputation Guide**: New comprehensive documentation at `docs/DNS_AND_REPUTATION.md`
 - **Credits**: Added acknowledgments for KumoMTA and Reacher.email in README
+
+---
+
+## [0.2.1] - 2026-01-07
+
+### Fixed
+
+- **Critical:** Database driver now auto-detected from `DATABASE_URL` environment variable
+- PostgreSQL connection works with standard `postgres://user:pass@host:port/db?sslmode=disable` format
+- No longer requires separate `SAMPMAIL_DB_DRIVER=postgres` setting
+
+---
+
+## [0.2.0] - 2026-01-07
+
+### Major Release: Multi-Tenancy & Admin Dashboard
+
+This release introduces a complete separation between Admin and User roles, with dedicated dashboards for each.
+
+### Added
+
+**Multi-Tenancy System**
+- Organization (Tenant) management for Super Admins
+- Organization switcher in sidebar
+- Org-scoped data isolation for campaigns, lists, subscribers
+
+**Admin Dashboard**
+- System-wide health monitoring (CPU, RAM)
+- Service status display (KumoMTA, Dovecot, Fail2Ban)
+- Open ports visualization
+- Quick access links to admin tools
+
+**User Dashboard**
+- Campaign performance stats (sent, opens, clicks)
+- Performance overview with trend indicators
+- Recent activity feed
+- Quick links to marketing features
+
+**Service Manager**
+- One-click install/start/stop/restart for KumoMTA, Dovecot, Reacher
+- Real-time service status monitoring
+- Service descriptions and documentation
 
 ---
 
