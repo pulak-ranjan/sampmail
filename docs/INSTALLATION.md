@@ -224,6 +224,7 @@ Type=simple
 User=sampmail
 Group=sampmail
 EnvironmentFile=/etc/sampmail.env
+WorkingDirectory=/opt/sampmail
 ExecStart=/opt/sampmail/sampmail
 Restart=always
 RestartSec=5

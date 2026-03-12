@@ -377,6 +377,7 @@ Type=simple
 User=$SERVICE_USER
 Group=$SERVICE_USER
 EnvironmentFile=$CONFIG_FILE
+WorkingDirectory=$INSTALL_DIR
 ExecStart=$INSTALL_DIR/sampmail
 Restart=always
 RestartSec=5
