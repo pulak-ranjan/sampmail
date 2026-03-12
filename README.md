@@ -113,6 +113,23 @@ SampMail is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.
 
 ---
 
+## 🌟 Acknowledgments
+
+SampMail stands on the shoulders of giants. We are incredibly grateful to the following open-source projects:
+
+- [**KumoMTA**](https://kumomta.com/) - High-performance mail transfer agent
+- [**Reacher**](https://reacher.email/) - Email address verification
+- [**Go**](https://golang.org/) - Backend language
+- [**Chi**](https://github.com/go-chi/chi) - HTTP router
+- [**GORM**](https://gorm.io/) - ORM and migration layer
+- [**React**](https://reactjs.org/) - Frontend framework
+- [**Tailwind CSS**](https://tailwindcss.com/) - Utility-first CSS framework
+- [**Redis**](https://redis.io/) - Rate limiting and caching
+- [**PostgreSQL**](https://www.postgresql.org/) - Primary database
+- [**Nginx**](https://nginx.org/) - Reverse proxy and web server
+
+---
+
 <p align="center">
   Built with ❤️ by the SampMail Team.
 </p>
