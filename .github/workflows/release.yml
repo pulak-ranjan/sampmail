@@ -40,9 +40,9 @@ jobs:
 
       - name: Create Release Archive
         run: |
-          mkdir -p release
+          mkdir -p release/web
           cp sampmail release/
-          cp -r web/dist release/web
+          cp -r web/dist release/web/
           cp .env.example release/
           cp README.md release/
           cp LICENSE.md release/
