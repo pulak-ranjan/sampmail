@@ -8,12 +8,12 @@ on:
 permissions:
   contents: write
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,6 +27,7 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+          node-version: 24
 
       - name: Build Backend
         run: |
